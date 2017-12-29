@@ -45,19 +45,17 @@ class Base(object):
   def train(self, sess, keep_prob):
     return sess.run([self.train_op, 
                      self.loss,
-                     # self.accuracy,
                      self.global_step,
                      self.batch_size,
                      self.summary], 
                      feed_dict={self.keep_prob: keep_prob})
 
-  def test(self, sess, input_x, sequence_length, input_y, keep_prob):
-    return sess.run([self.accuracy,self.batch_size], 
-                    feed_dict={self.input_x: input_x, self.input_y: input_y, 
-                               self.keep_prob: keep_prob, self.sequence_length: sequence_length})
+  def test(self, sess, keep_prob):
+    return sess.run([self.loss, self.batch_size], 
+                    feed_dict={self.keep_prob: keep_prob})
 
 class TextCNN(Base):
-  def __init__(self, args,iterator, name=None):
+  def __init__(self, args, iterator, name=None):
     self.filter_sizes = args.filter_sizes
     self.num_filters = args.num_filters
 
@@ -76,6 +74,7 @@ class TextCNN(Base):
                             strides=[1, 1, 1, 1],
                             padding="VALID",
                             name="conv")
+        # conv = tf.layers.batch_normalization(conv)
         hidden = tf.nn.relu(conv + bias)
         pool = tf.nn.max_pool(value=hidden,
                               ksize=[1, self.sentence_length - filter_size + 1, 1, 1],
@@ -99,14 +98,8 @@ class TextCNN(Base):
 
     with tf.name_scope("loss"):
       losses = tf.nn.sigmoid_cross_entropy_with_logits(labels=self.iterator.labels, logits=self.scores)
-      losses = tf.reduce_sum(losses, axis=1)
       self.loss = tf.reduce_mean(losses)
       tf.summary.scalar("/cross_entropy", self.loss)
-
-    # with tf.name_scope("accuracy"):
-    #   correct_predictions = tf.equal(self.predictions, tf.argmax(self.input_y, 1))
-    #   self.accuracy = tf.reduce_mean(tf.cast(correct_predictions, tf.float32), name="accuracy")
-    #   tf.summary.scalar("/accuracy", self.accuracy)
 
     with tf.name_scope('train'):
       grads_and_vars = self.optimizer.compute_gradients(self.loss)
@@ -114,20 +107,22 @@ class TextCNN(Base):
       self.train_op = self.optimizer.apply_gradients(grads_and_vars, global_step=self.global_step)
 
     self.summary = tf.summary.merge_all()
+    self.saver = tf.train.Saver(tf.global_variables())
 
 class TextRNN(Base):
-  def __init__(self, args, name=None):
-    super(TextRNN, self).__init__(args=args, name=name)
+  def __init__(self, args, iterator, name=None):
+    super(TextRNN, self).__init__(args=args, iterator=iterator, name=name)
     self.hidden_size = args.hidden_size
     self.model_type = args.model_type
+    self.rnn_type = args.rnn_type
 
     with tf.variable_scope("rnn"):
-      if self.encoder_type == "rnn":
+      if self.rnn_type == "rnn":
         cell = tf.contrib.rnn.LSTMCell(self.hidden_size)
         rnn_output, rnn_state = tf.nn.dynamic_rnn(cell=cell, 
                                                   inputs=self.embed_inp, 
                                                   dtype=tf.float32,
-                                                  sequence_length=self.sequence_length)
+                                                  sequence_length=self.iterator.sentence_length)
         self.rnn_state = tf.concat(rnn_state, 1)
       elif self.model_type == "bi_rnn":
         fw_cell = tf.contrib.rnn.LSTMCell(self.hidden_size)
@@ -136,7 +131,7 @@ class TextRNN(Base):
                                                                 cell_bw=bw_cell, 
                                                                 inputs=self.embed_inp,
                                                                 dtype=tf.float32, 
-                                                                sequence_length=self.sequence_length)
+                                                                sequence_length=self.iterator.sentence_length)
         self.rnn_state = tf.concat(rnn_output, 1)
 
     with tf.name_scope("output"):
@@ -145,14 +140,9 @@ class TextRNN(Base):
       self.activation_summary(self.scores)
 
     with tf.name_scope("loss"):
-      losses = tf.nn.softmax_cross_entropy_with_logits(logits=self.scores, labels=self.input_y)
+      losses = tf.nn.sigmoid_cross_entropy_with_logits(labels=self.iterator.labels, logits=self.scores)
       self.loss = tf.reduce_mean(losses)
       tf.summary.scalar("/cross_entropy", self.loss)
-
-    with tf.name_scope("accuracy"):
-      correct_predictions = tf.equal(self.predictions, tf.argmax(self.input_y, 1))
-      self.accuracy = tf.reduce_mean(tf.cast(correct_predictions, tf.float32), name="accuracy")
-      tf.summary.scalar("/accuracy", self.accuracy)
 
     with tf.name_scope('train'):
       grads_and_vars = self.optimizer.compute_gradients(self.loss)
@@ -160,4 +150,4 @@ class TextRNN(Base):
       self.train_op = self.optimizer.apply_gradients(grads_and_vars, global_step=self.global_step)
 
     self.summary = tf.summary.merge_all()
-
+    self.saver = tf.train.Saver(tf.global_variables())
