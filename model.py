@@ -45,7 +45,7 @@ class Base(object):
   def train(self, sess, keep_prob):
     return sess.run([self.train_op, 
                      self.loss,
-                     self.accuracy,
+                     # self.accuracy,
                      self.global_step,
                      self.batch_size,
                      self.summary], 
@@ -57,11 +57,11 @@ class Base(object):
                                self.keep_prob: keep_prob, self.sequence_length: sequence_length})
 
 class TextCNN(Base):
-  def __init__(self, args, name=None):
+  def __init__(self, args,iterator, name=None):
     self.filter_sizes = args.filter_sizes
     self.num_filters = args.num_filters
 
-    super(TextCNN, self).__init__(args=args, name=name)
+    super(TextCNN, self).__init__(args=args, iterator=iterator, name=name)
 
     embed_exp = tf.expand_dims(self.embed_inp, -1)
 
@@ -103,10 +103,10 @@ class TextCNN(Base):
       self.loss = tf.reduce_mean(losses)
       tf.summary.scalar("/cross_entropy", self.loss)
 
-    with tf.name_scope("accuracy"):
-      correct_predictions = tf.equal(self.predictions, tf.argmax(self.input_y, 1))
-      self.accuracy = tf.reduce_mean(tf.cast(correct_predictions, tf.float32), name="accuracy")
-      tf.summary.scalar("/accuracy", self.accuracy)
+    # with tf.name_scope("accuracy"):
+    #   correct_predictions = tf.equal(self.predictions, tf.argmax(self.input_y, 1))
+    #   self.accuracy = tf.reduce_mean(tf.cast(correct_predictions, tf.float32), name="accuracy")
+    #   tf.summary.scalar("/accuracy", self.accuracy)
 
     with tf.name_scope('train'):
       grads_and_vars = self.optimizer.compute_gradients(self.loss)
