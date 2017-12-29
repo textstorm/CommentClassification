@@ -6,8 +6,15 @@ class BatchedInput(collections.namedtuple("BatchedInput",
                                           ("initializer",
                                            "comments",
                                            "labels",
-                                           "sequence_length"))):
+                                           "sentence_length"))):
   pass
+
+def pad_sequences(sequence, max_len):
+  seq_len = tf.size(sequence)
+  sequence = tf.cond(seq_len > max_len, 
+                     lambda: tf.slice(sequence, [seq_len - max_len], [max_len]),
+                     lambda: tf.pad(sequence, [[0, max_len - seq_len]]))
+  return sequence
 
 def read_row(csv_row):
   record_defaults = [[0], [0.], [""], [0], [0], [0], [0], [0], [0], [0]]
@@ -33,28 +40,35 @@ def get_iterator(dataset,
   dataset = dataset.map(lambda line: read_row(line))
   dataset = dataset.map(lambda x, y: (tf.string_split([x]).values, y))
   dataset = dataset.map(lambda x, y: (tf.cast(vocab_table.lookup(x), tf.int32), y))
-  dataset = dataset.map(lambda x, y: (pad_sequences(x, max_len), y))
+  dataset = dataset.map(lambda x, y: (pad_sequences(x, max_len), tf.cast(y, tf.float32)))
   dataset = dataset.map(lambda x, y: (x, y, tf.size(x)))
 
   def batching_func(x):
     return x.padded_batch(
         batch_size,
         padded_shapes=(
-            tf.TensorShape([None]),  # src
-            tf.TensorShape([None]), #tgt_in
-            tf.TensorShape([])), # tgt_len
+            tf.TensorShape([None]),  #comments
+            tf.TensorShape([None]), #labels
+            tf.TensorShape([])), # length
 
         padding_values=(
-            unk_id,  # src
-            unk_id,  # tgt_input
-            0))  # tgt_len -- unused
+            unk_id,
+            0.,
+            0))
 
   batch_dataset = batching_func(dataset)
   batch_iterator = batch_dataset.make_initializable_iterator()
-  (comments, labels, sequence_length) = (batch_iterator.get_next())
+  (comments, labels, sentence_length) = (batch_iterator.get_next())
 
   return BatchedInput(
     initializer=batch_iterator.initializer,
     comments=comments,
     labels=labels,
-    sequence_length=sequence_length)
+    sentence_length=sentence_length)
+
+def get_config_proto(log_device_placement=False, allow_soft_placement=True):
+  config_proto = tf.ConfigProto(
+      log_device_placement=log_device_placement,
+      allow_soft_placement=allow_soft_placement)
+  config_proto.gpu_options.allow_growth = True
+  return config_proto
