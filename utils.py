@@ -1,6 +1,7 @@
 
 import tensorflow as tf
 import collections
+import sys
 
 class BatchedInput(collections.namedtuple("BatchedInput",
                                           ("initializer",
@@ -40,8 +41,9 @@ def get_iterator(dataset,
   dataset = dataset.map(lambda line: read_row(line))
   dataset = dataset.map(lambda x, y: (tf.string_split([x]).values, y))
   dataset = dataset.map(lambda x, y: (tf.cast(vocab_table.lookup(x), tf.int32), y))
-  dataset = dataset.map(lambda x, y: (pad_sequences(x, max_len), tf.cast(y, tf.float32)))
-  dataset = dataset.map(lambda x, y: (x, y, tf.size(x)))
+  if max_len is not None:
+    dataset = dataset.map(lambda x, y: (pad_sequences(x, max_len), y))
+  dataset = dataset.map(lambda x, y: (x, tf.cast(y, tf.float32), tf.size(x)))
 
   def batching_func(x):
     return x.padded_batch(
@@ -72,3 +74,22 @@ def get_config_proto(log_device_placement=False, allow_soft_placement=True):
       allow_soft_placement=allow_soft_placement)
   config_proto.gpu_options.allow_growth = True
   return config_proto
+
+def print_out(s, f=None, new_line=True):
+  if isinstance(s, bytes):
+    s = s.decode("utf-8")
+
+  if f:
+    f.write(s.encode("utf-8"))
+    if new_line:
+      f.write(b"\n")
+
+  # stdout
+  out_s = s.encode("utf-8")
+  if not isinstance(out_s, str):
+    out_s = out_s.decode("utf-8")
+  print out_s,
+
+  if new_line:
+    sys.stdout.write("\n")
+  sys.stdout.flush()
