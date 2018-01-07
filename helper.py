@@ -80,6 +80,39 @@ def build_eval_model(args, name="eval_model", scope=None):
 
   return EvalModel(graph=graph, model=model, iterator=iterator)
 
+class TestModel(
+    collections.namedtuple("TestModel",
+                           ("graph", "model", "iterator"))):
+  pass
+
+def build_test_model(args, name="test_model", scope=None):
+  vocab_dir = args.vocab_dir
+  data_dir = args.test_dir
+  graph = tf.Graph()
+
+  with graph.as_default(), tf.container(scope or "test"):
+    vocab_table = lookup_ops.index_table_from_file(vocab_dir, default_value=0)
+    dataset = tf.data.TextLineDataset(data_dir).skip(1)
+
+    if args.model_type == "cnn":
+      iterator = utils.get_test_iterator(
+          dataset=dataset,
+          vocab_table=vocab_table,
+          batch_size=args.max_size,
+          max_len=args.sentence_length)
+      model = TextCNN(args, iterator, name=name)
+    elif args.model_type in ["rnn", "bi_rnn"]:
+      iterator = utils.get_test_iterator(
+          dataset=dataset,
+          vocab_table=vocab_table,
+          batch_size=args.max_size,
+          max_len=None)
+      model = TextRNN(args, iterator, name=name)
+    else:
+      raise ValueError("Unknown model_type %s" % args.model_type)
+
+  return TestModel(graph=graph, model=model, iterator=iterator)
+
 def load_model(model, ckpt, session, name):
   start_time = time.time()
   model.saver.restore(session, ckpt)
