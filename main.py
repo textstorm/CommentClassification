@@ -4,9 +4,11 @@ import utils
 import time
 import config
 import helper
+import pandas as pd
+import numpy as np
 import tensorflow as tf
 
-os.environ["CUDA_VISIBLE_DEVICES"] = "1"
+# os.environ["CUDA_VISIBLE_DEVICES"] = "1"
 
 def run_valid(args, valid_model, valid_sess, model_dir):
   with valid_model.graph.as_default():
@@ -33,6 +35,7 @@ def main(args):
   #dir
   save_dir = args.save_dir
   log_dir = args.log_dir
+  pretrain_dir = args.glove_dir
   if not os.path.exists(save_dir):
     os.makedirs(save_dir)
   if not os.path.exists(log_dir):
@@ -60,7 +63,9 @@ def main(args):
 
   print "Epoch %d start " % (epoch)
   print "- " * 50
-
+  vocab = utils.load_data(args.vocab_dir)
+  embedding = utils.load_glove(pretrain_dir, vocab)
+  train_sess.run(loaded_train_model.embedding_init, {loaded_train_model.embedding_placeholder: embedding})
   for step in range(args.max_step):
     try:
       _, loss_t, global_step, batch_size, summaries = loaded_train_model.train(train_sess, args.keep_prob)
@@ -69,7 +74,7 @@ def main(args):
       total_reviews += batch_size
       summary_writer.add_summary(summaries, global_step)
 
-      if global_step % 200 == 0:
+      if global_step % 100 == 0:
         print "epoch %d, step %d, loss %f, time %.2fs" % \
           (epoch, global_step, loss_t, time.time() - step_start_time)   
         step_start_time = time.time()
@@ -84,15 +89,54 @@ def main(args):
       print "%.2f seconds in this epoch" % (epoch_time)
       print "train loss %f valid loss %f" % (loss / total_reviews, avg_loss)
 
-      train_sess.run(loaded_train_model.iterator.initializer)
+      train_sess.run(train_model.iterator.initializer)
       epoch_start_time = time.time()
       total_reviews = 0
       loss = 0.
       epoch += 1
       print "Epoch %d start " % (epoch)
       print "- " * 50
+      step_start_time = time.time()
       continue
+
+def run_test(args, test_model, test_sess, model_dir):
+  with test_model.graph.as_default():
+    loaded_test_model, global_step = helper.create_or_load_model(
+        test_model.model, model_dir, test_sess, "test")
+
+  _run_test(args, loaded_test_model, global_step, test_sess, test_model.iterator)
+
+def _run_test(args, model, global_step, sess, iterator):
+  sess.run(iterator.initializer)
+  total_logits = []
+  while True:
+    try:
+      logits = model.get_logits(sess, 1.).tolist()
+      total_logits += logits
+    except tf.errors.OutOfRangeError:
+      break
+  print np.array(total_logits).shape
+  write_results(np.asarray(total_logits, dtype=np.float64))
+
+def write_results(logits):
+  data = pd.read_csv(args.test_dir)
+  columns = ['id', 'toxic', 'severe_toxic', 'obscene', 'threat', 'insult', 'identity_hate']
+  label_cols = ['toxic', 'severe_toxic', 'obscene', 'threat', 'insult', 'identity_hate']
+  data = data.reindex(columns=columns)
+  data[label_cols] = logits
+  data.to_csv(args.sub_dir, index=False)
+
+def test(args):
+  save_dir = args.save_dir
+  test_model = helper.build_test_model(args)
+  config_proto = utils.get_config_proto()
+  test_sess = tf.Session(config=config_proto, graph=test_model.graph)
+
+  start_time = time.time()
+  run_test(args, test_model, test_sess, args.save_dir)
+
 
 if __name__ == '__main__':
   args = config.get_args()
-  main(args)
+  # main(args)
+  test(args)
