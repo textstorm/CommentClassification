@@ -18,7 +18,11 @@ class Base(object):
     self.optimizer = tf.train.AdamOptimizer(self.learning_rate)
     self.global_step = tf.Variable(0, trainable=False)
 
-    self.embedding = self._build_embedding(self.vocab_size, self.embed_size, "encoder_embedding")
+    #self.embedding = self._build_embedding(self.vocab_size, self.embed_size, "embedding")
+    self.embedding = tf.Variable(tf.constant(0.0, shape=[self.vocab_size, self.embed_size]),
+                                 trainable=True, name="embedding")
+    self.embedding_placeholder = tf.placeholder(tf.float32, [self.vocab_size, self.embed_size])
+    self.embedding_init = self.embedding.assign(self.embedding_placeholder)
     self.embed_inp = tf.nn.embedding_lookup(self.embedding, self.iterator.comments)
 
   def _weight_variable(self, shape, name, initializer=None):
@@ -53,6 +57,9 @@ class Base(object):
   def test(self, sess, keep_prob):
     return sess.run([self.loss, self.batch_size], 
                     feed_dict={self.keep_prob: keep_prob})
+
+  def get_logits(self, sess, keep_prob):
+    return sess.run(self.logits, feed_dict={self.keep_prob: keep_prob})
 
 class TextCNN(Base):
   def __init__(self, args, iterator, name=None):
@@ -93,6 +100,7 @@ class TextCNN(Base):
 
     with tf.name_scope("output"):
       self.scores = tf.layers.dense(self.h_drop, self.nb_classes, name="scores")
+      self.logits = tf.nn.sigmoid(self.scores)
       self.predictions = tf.argmax(self.scores, 1, name="predictions")
       self.activation_summary(self.scores)
 
@@ -115,27 +123,31 @@ class TextRNN(Base):
     self.hidden_size = args.hidden_size
     self.model_type = args.model_type
     self.rnn_type = args.rnn_type
+    self.rnn_layers = args.rnn_layers
 
     with tf.variable_scope("rnn"):
       if self.rnn_type == "rnn":
-        cell = tf.contrib.rnn.LSTMCell(self.hidden_size)
+        cell = self.build_rnn_cell(self.hidden_size, self.rnn_layers, self.keep_prob)
         rnn_output, rnn_state = tf.nn.dynamic_rnn(cell=cell, 
                                                   inputs=self.embed_inp, 
                                                   dtype=tf.float32,
                                                   sequence_length=self.iterator.sentence_length)
-        self.rnn_state = tf.concat(rnn_state, 1)
-      elif self.model_type == "bi_rnn":
-        fw_cell = tf.contrib.rnn.LSTMCell(self.hidden_size)
-        bw_cell = tf.contrib.rnn.LSTMCell(self.hidden_size)
+        self.rnn_state = tf.concat(rnn_state[1], 1)
+
+      elif self.rnn_type == "bi_rnn":
+        fw_cell = tf.contrib.rnn.GRUCell(self.hidden_size)
+        bw_cell = tf.contrib.rnn.GRUCell(self.hidden_size)
         rnn_output, rnn_state = tf.nn.bidirectional_dynamic_rnn(cell_fw=fw_cell, 
                                                                 cell_bw=bw_cell, 
                                                                 inputs=self.embed_inp,
                                                                 dtype=tf.float32, 
                                                                 sequence_length=self.iterator.sentence_length)
-        self.rnn_state = tf.concat(rnn_output, 1)
+        self.rnn_state = tf.concat(rnn_state, -1)
+        print self.rnn_state.get_shape().as_list()
 
     with tf.name_scope("output"):
       self.scores = tf.layers.dense(self.rnn_state, self.nb_classes, name="scores")
+      self.logits = tf.nn.sigmoid(self.scores)
       self.predictions = tf.argmax(self.scores, 1, name="predictions")
       self.activation_summary(self.scores)
 
@@ -151,3 +163,22 @@ class TextRNN(Base):
 
     self.summary = tf.summary.merge_all()
     self.saver = tf.train.Saver(tf.global_variables())
+
+  def single_cell(self, num_units, keep_prob):
+    """ single cell """
+    cell = tf.contrib.rnn.LSTMCell(num_units=num_units, state_is_tuple=True)
+    # if keep_prob < 1.0:
+    #   print"use dropout, dropout rate: %.2f" % (1.0 - keep_prob)
+    #   cell = tf.contrib.rnn.DropoutWrapper(cell=cell, input_keep_prob=keep_prob)
+    return cell
+
+  def build_rnn_cell(self, num_units, num_layers, keep_prob=1.0):
+    cell_list = []
+    for i in range(num_layers):
+      cell = self.single_cell(num_units, keep_prob)
+      cell_list.append(cell)
+
+    if num_layers == 1:
+      return cell_list[0]
+    else:
+      return tf.contrib.rnn.MultiRNNCell(cell_list)
