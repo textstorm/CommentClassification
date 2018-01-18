@@ -48,6 +48,13 @@ def pad_sequences(sequence, max_len):
                      lambda: tf.pad(sequence, [[0, max_len - seq_len]]))
   return sequence
 
+def deal_very_long_test_data(sequence, max_len=1000):
+  seq_len = tf.size(sequence)
+  sequence = tf.cond(seq_len > max_len, 
+                     lambda: tf.slice(sequence, [seq_len - max_len], [max_len]),
+                     lambda: sequence)
+  return sequence
+
 def read_row(csv_row):
   record_defaults = [[0], [0.], [""], [0], [0], [0], [0], [0], [0]]
   row = tf.decode_csv(csv_row, record_defaults=record_defaults)
@@ -120,6 +127,7 @@ def get_test_iterator(dataset,
   dataset = dataset.map(lambda line: read_test_row(line))
   dataset = dataset.map(lambda line: tf.string_split([line]).values)
   dataset = dataset.map(lambda line: tf.cast(vocab_table.lookup(line), tf.int32))
+  dataset = dataset.map(lambda line: deal_very_long_test_data(line))
   if max_len is not None:
     dataset = dataset.map(lambda line: pad_sequences(line, max_len))
   dataset = dataset.map(lambda line: (line, tf.cast(line, tf.float32), tf.size(line)))
