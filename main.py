@@ -8,7 +8,7 @@ import pandas as pd
 import numpy as np
 import tensorflow as tf
 
-# os.environ["CUDA_VISIBLE_DEVICES"] = "1"
+os.environ["CUDA_VISIBLE_DEVICES"] = "0"
 
 def run_valid(args, valid_model, valid_sess, model_dir):
   with valid_model.graph.as_default():
@@ -33,13 +33,16 @@ def _run_valid(model, global_step, sess, iterator):
 
 def main(args):
   #dir
-  save_dir = args.save_dir
-  log_dir = args.log_dir
   pretrain_dir = args.glove_dir
+  if args.model_type == "cnn": 
+    save_dir = args.cnn_save_dir
+    max_step = args.max_step_cnn
+  elif args.model_type == "rnn": 
+    save_dir = args.rnn_save_dir
+    max_step = args.max_step_rnn
+
   if not os.path.exists(save_dir):
     os.makedirs(save_dir)
-  if not os.path.exists(log_dir):
-    os.makedirs(log_dir)
 
   train_model = helper.build_train_model(args)
   valid_model = helper.build_eval_model(args)
@@ -50,10 +53,10 @@ def main(args):
 
   with train_model.graph.as_default():
     loaded_train_model, global_step = helper.create_or_load_model(
-        train_model.model, args.save_dir, train_sess, name="train")
+        train_model.model, save_dir, train_sess, name="train")
 
   train_sess.run(train_model.iterator.initializer)
-  summary_writer = tf.summary.FileWriter(log_dir, train_sess.graph)
+  # summary_writer = tf.summary.FileWriter(log_dir, train_sess.graph)
 
   loss = 0.
   total_reviews = 0
@@ -66,25 +69,32 @@ def main(args):
   vocab = utils.load_data(args.vocab_dir)
   embedding = utils.load_glove(pretrain_dir, vocab)
   train_sess.run(loaded_train_model.embedding_init, {loaded_train_model.embedding_placeholder: embedding})
-  for step in range(args.max_step):
+  for step in range(max_step):
     try:
       _, loss_t, global_step, batch_size, summaries = loaded_train_model.train(train_sess, args.keep_prob)
 
       loss += loss_t * batch_size
       total_reviews += batch_size
-      summary_writer.add_summary(summaries, global_step)
+      # summary_writer.add_summary(summaries, global_step)
 
       if global_step % 100 == 0:
         print "epoch %d, step %d, loss %f, time %.2fs" % \
           (epoch, global_step, loss_t, time.time() - step_start_time)   
         step_start_time = time.time()
 
+      if global_step % 1000 == 0:
+        loaded_train_model.saver.save(train_sess,
+            os.path.join(save_dir, "model.ckpt"), global_step=global_step)   
+        avg_loss = run_valid(args, valid_model, valid_sess, save_dir)
+        print "valid loss %f after train step %d" % (avg_loss, global_step)
+        step_start_time = time.time()        
+
     except tf.errors.OutOfRangeError:
       print "epoch %d finish, time %.2fs" % (epoch, time.time() - epoch_start_time)
       print "- " * 50
       loaded_train_model.saver.save(train_sess,
-                    os.path.join(args.save_dir, "model.ckpt"), global_step=global_step)      
-      avg_loss = run_valid(args, valid_model, valid_sess, args.save_dir)
+                    os.path.join(save_dir, "model.ckpt"), global_step=global_step)      
+      avg_loss = run_valid(args, valid_model, valid_sess, save_dir)
       epoch_time = time.time() - epoch_start_time
       print "%.2f seconds in this epoch" % (epoch_time)
       print "train loss %f valid loss %f" % (loss / total_reviews, avg_loss)
@@ -127,16 +137,20 @@ def write_results(logits):
   data.to_csv(args.sub_dir, index=False)
 
 def test(args):
-  save_dir = args.save_dir
+  if args.model_type == "cnn": 
+    save_dir = args.cnn_save_dir
+  elif args.model_type == "rnn": 
+    save_dir = args.rnn_save_dir
+
   test_model = helper.build_test_model(args)
   config_proto = utils.get_config_proto()
   test_sess = tf.Session(config=config_proto, graph=test_model.graph)
 
   start_time = time.time()
-  run_test(args, test_model, test_sess, args.save_dir)
+  run_test(args, test_model, test_sess, save_dir)
 
 
 if __name__ == '__main__':
   args = config.get_args()
-  # main(args)
-  test(args)
+  main(args)
+  # test(args)
