@@ -29,7 +29,7 @@ def build_train_model(args, name="train_model", scope=None):
           random_seed=args.random_seed,
           shuffle=True)
       model = TextCNN(args, iterator, name=name)
-    elif args.model_type in ["rnn", "bi_rnn"]:
+    elif args.model_type == "rnn":
       iterator = utils.get_iterator(
           dataset=dataset,
           vocab_table=vocab_table,
@@ -61,16 +61,16 @@ def build_eval_model(args, name="eval_model", scope=None):
       iterator = utils.get_iterator(
           dataset=dataset,
           vocab_table=vocab_table,
-          batch_size=args.max_size,
+          batch_size=args.max_size_cnn,
           max_len=args.sentence_length,
           random_seed=args.random_seed,
           shuffle=True)
       model = TextCNN(args, iterator, name=name)
-    elif args.model_type in ["rnn", "bi_rnn"]:
+    elif args.model_type == "rnn":
       iterator = utils.get_iterator(
           dataset=dataset,
           vocab_table=vocab_table,
-          batch_size=args.max_size,
+          batch_size=args.max_size_rnn,
           max_len=None,
           random_seed=args.random_seed,
           shuffle=True)
@@ -101,7 +101,7 @@ def build_test_model(args, name="test_model", scope=None):
           batch_size=args.max_size,
           max_len=args.sentence_length)
       model = TextCNN(args, iterator, name=name)
-    elif args.model_type in ["rnn", "bi_rnn"]:
+    elif args.model_type == "rnn":
       iterator = utils.get_test_iterator(
           dataset=dataset,
           vocab_table=vocab_table,
