@@ -81,14 +81,13 @@ class TextCNN(Base):
                             strides=[1, 1, 1, 1],
                             padding="VALID",
                             name="conv")
-        # conv = tf.layers.batch_normalization(conv)
+        conv = tf.layers.batch_normalization(conv)
         hidden = tf.nn.relu(conv + bias)
         pool = tf.nn.max_pool(value=hidden,
                               ksize=[1, self.sentence_length - filter_size + 1, 1, 1],
                               strides=[1, 1, 1, 1],
                               padding="VALID",
                               name="pooling")
-
         pooling_output.append(pool)
 
     num_filters_total = self.num_filters * len(self.filter_sizes)
@@ -105,8 +104,12 @@ class TextCNN(Base):
       self.activation_summary(self.scores)
 
     with tf.name_scope("loss"):
+      l2_lambda = 0.0001
       losses = tf.nn.sigmoid_cross_entropy_with_logits(labels=self.iterator.labels, logits=self.scores)
-      self.loss = tf.reduce_mean(losses)
+      loss = tf.reduce_mean(losses)
+      l2_losses = tf.add_n(
+          [tf.nn.l2_loss(v) for v in tf.trainable_variables() if 'bias' not in v.name]) * l2_lambda
+      self.loss = loss + l2_losses
       tf.summary.scalar("/cross_entropy", self.loss)
 
     with tf.name_scope('train'):
@@ -132,18 +135,20 @@ class TextRNN(Base):
                                                   inputs=self.embed_inp, 
                                                   dtype=tf.float32,
                                                   sequence_length=self.iterator.sentence_length)
-        self.rnn_state = tf.concat(rnn_state[1], 1)
+        self.rnn_state = rnn_state
 
       elif self.rnn_type == "bi_rnn":
-        fw_cell = tf.contrib.rnn.GRUCell(self.hidden_size)
-        bw_cell = tf.contrib.rnn.GRUCell(self.hidden_size)
+        # fw_cell = tf.contrib.rnn.GRUCell(self.hidden_size)
+        # bw_cell = tf.contrib.rnn.GRUCell(self.hidden_size)
+        num_layers = self.rnn_layers // 2
+        fw_cell = self.build_rnn_cell(self.hidden_size, num_layers, self.keep_prob)
+        bw_cell = self.build_rnn_cell(self.hidden_size, num_layers, self.keep_prob)
         rnn_output, rnn_state = tf.nn.bidirectional_dynamic_rnn(cell_fw=fw_cell, 
                                                                 cell_bw=bw_cell, 
                                                                 inputs=self.embed_inp,
                                                                 dtype=tf.float32, 
                                                                 sequence_length=self.iterator.sentence_length)
         self.rnn_state = tf.concat(rnn_state, -1)
-        print self.rnn_state.get_shape().as_list()
 
     with tf.name_scope("output"):
       self.scores = tf.layers.dense(self.rnn_state, self.nb_classes, name="scores")
@@ -166,10 +171,8 @@ class TextRNN(Base):
 
   def single_cell(self, num_units, keep_prob):
     """ single cell """
-    cell = tf.contrib.rnn.LSTMCell(num_units=num_units, state_is_tuple=True)
-    # if keep_prob < 1.0:
-    #   print"use dropout, dropout rate: %.2f" % (1.0 - keep_prob)
-    #   cell = tf.contrib.rnn.DropoutWrapper(cell=cell, input_keep_prob=keep_prob)
+    cell = tf.contrib.rnn.GRUCell(num_units=num_units)
+    cell = tf.contrib.rnn.DropoutWrapper(cell=cell, input_keep_prob=keep_prob)
     return cell
 
   def build_rnn_cell(self, num_units, num_layers, keep_prob=1.0):
