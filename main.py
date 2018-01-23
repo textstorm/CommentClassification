@@ -33,7 +33,7 @@ def _run_valid(model, global_step, sess, iterator):
 
 def main(args):
   #dir
-  pretrain_dir = args.glove_dir
+  pretrain_dir = args.wordvec_dir
   if args.model_type == "cnn": 
     save_dir = args.cnn_save_dir
     max_step = args.max_step_cnn
@@ -64,10 +64,12 @@ def main(args):
   epoch_start_time = time.time()
   step_start_time = epoch_start_time
 
+  print "word vector %s" % (args.wordvec_dir)
+  print "model type %s" % (args.model_type)
   print "Epoch %d start " % (epoch)
   print "- " * 50
   vocab = utils.load_data(args.vocab_dir)
-  embedding = utils.load_glove(pretrain_dir, vocab)
+  embedding = utils.load_fasttext(pretrain_dir, vocab)
   train_sess.run(loaded_train_model.embedding_init, {loaded_train_model.embedding_placeholder: embedding})
   for step in range(max_step):
     try:
@@ -153,4 +155,4 @@ def test(args):
 if __name__ == '__main__':
   args = config.get_args()
   main(args)
-  # test(args)
+  test(args)
