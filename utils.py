@@ -2,6 +2,7 @@
 import tensorflow as tf
 import numpy as np
 import collections
+import tqdm
 import sys
 
 def load_data(file_dir):
@@ -34,6 +35,23 @@ def load_glove(pretrain_dir, vocab):
       embedding[idx] = word_vector
   return embedding
 
+def load_fasttext(pretrain_dir, vocab):
+  embedding_dict = {}
+  f = open(pretrain_dir, 'r')
+  for row in tqdm.tqdm(f.read().split("\n")[1:-1]):
+    values = row.split(" ")
+    word = values[0]
+    vector = np.array([float(num) for num in values[1:-1]])
+    embedding_dict[word] = vector
+  f.close()
+  vocab_size = len(vocab)
+  embedding = np.zeros((vocab_size, 300))
+  for idx, word in enumerate(vocab):
+    word_vector = embedding_dict.get(word)
+    if word_vector is not None:
+      embedding[idx] = word_vector
+  return embedding
+
 class BatchedInput(collections.namedtuple("BatchedInput",
                                           ("initializer",
                                            "comments",
@@ -56,7 +74,7 @@ def deal_very_long_test_data(sequence, max_len=1000):
   return sequence
 
 def read_row(csv_row):
-  record_defaults = [[0], [0.], [""], [0], [0], [0], [0], [0], [0]]
+  record_defaults = [[0], [""], [""], [0], [0], [0], [0], [0], [0]]
   row = tf.decode_csv(csv_row, record_defaults=record_defaults)
   return row[2], row[3:]
 
@@ -114,7 +132,7 @@ def get_config_proto(log_device_placement=False, allow_soft_placement=True):
   return config_proto
 
 def read_test_row(csv_row):
-  record_defaults = [[0], [0.], [""]]
+  record_defaults = [[0], [""], [""]]
   row = tf.decode_csv(csv_row, record_defaults=record_defaults)
   return row[2]
 
