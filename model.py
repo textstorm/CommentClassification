@@ -106,10 +106,10 @@ class TextCNN(Base):
     with tf.name_scope("loss"):
       l2_lambda = 0.0001
       losses = tf.nn.sigmoid_cross_entropy_with_logits(labels=self.iterator.labels, logits=self.scores)
-      loss = tf.reduce_mean(losses)
-      l2_losses = tf.add_n(
-          [tf.nn.l2_loss(v) for v in tf.trainable_variables() if 'bias' not in v.name]) * l2_lambda
-      self.loss = loss + l2_losses
+      self.loss = tf.reduce_mean(losses)
+      # l2_losses = tf.add_n(
+      #     [tf.nn.l2_loss(v) for v in tf.trainable_variables() if 'bias' not in v.name]) * l2_lambda
+      # self.loss = loss + l2_losses
       tf.summary.scalar("/cross_entropy", self.loss)
 
     with tf.name_scope('train'):
