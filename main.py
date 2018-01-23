@@ -64,8 +64,8 @@ def main(args):
   epoch_start_time = time.time()
   step_start_time = epoch_start_time
 
-  print "word vector %s" % (args.wordvec_dir)
-  print "model type %s" % (args.model_type)
+  print "Word vector use %s" % (args.wordvec_dir.split("/")[-1])
+  print "Model type is %s" % (args.model_type)
   print "Epoch %d start " % (epoch)
   print "- " * 50
   vocab = utils.load_data(args.vocab_dir)
