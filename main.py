@@ -37,9 +37,11 @@ def main(args):
   if args.model_type == "cnn": 
     save_dir = args.cnn_save_dir
     max_step = args.max_step_cnn
+    keep_prob = args.keep_prob_cnn
   elif args.model_type == "rnn": 
     save_dir = args.rnn_save_dir
     max_step = args.max_step_rnn
+    keep_prob = args.keep_prob_rnn
 
   if not os.path.exists(save_dir):
     os.makedirs(save_dir)
