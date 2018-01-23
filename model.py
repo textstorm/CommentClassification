@@ -138,8 +138,6 @@ class TextRNN(Base):
         self.rnn_state = rnn_state
 
       elif self.rnn_type == "bi_rnn":
-        # fw_cell = tf.contrib.rnn.GRUCell(self.hidden_size)
-        # bw_cell = tf.contrib.rnn.GRUCell(self.hidden_size)
         num_layers = self.rnn_layers // 2
         fw_cell = self.build_rnn_cell(self.hidden_size, num_layers, self.keep_prob)
         bw_cell = self.build_rnn_cell(self.hidden_size, num_layers, self.keep_prob)
@@ -148,10 +146,14 @@ class TextRNN(Base):
                                                                 inputs=self.embed_inp,
                                                                 dtype=tf.float32, 
                                                                 sequence_length=self.iterator.sentence_length)
+        if num_layers > 1:
+          rnn_state = tuple(rnn_state[0][num_bi_layers - 1], rnn_state[1][num_bi_layers - 1])
         self.rnn_state = tf.concat(rnn_state, -1)
+        print self.rnn_state.get_shape().as_list()
 
     with tf.name_scope("output"):
-      self.scores = tf.layers.dense(self.rnn_state, self.nb_classes, name="scores")
+      pre_score = tf.layers.dense(self.rnn_state, 32, name="pre_scores")
+      self.scores = tf.layers.dense(pre_score, self.nb_classes, name="scores")
       self.logits = tf.nn.sigmoid(self.scores)
       self.predictions = tf.argmax(self.scores, 1, name="predictions")
       self.activation_summary(self.scores)
