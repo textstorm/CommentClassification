@@ -17,7 +17,7 @@ def build_train_model(args, name="train_model", scope=None):
   graph = tf.Graph()
 
   with graph.as_default():
-    vocab_table = lookup_ops.index_table_from_file(vocab_dir, default_value=0)
+    vocab_table = lookup_ops.index_table_from_file(vocab_dir, default_value=0) #default_value can also be -1
     dataset = tf.data.TextLineDataset(data_dir).skip(1)
 
     if args.model_type == "cnn":
