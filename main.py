@@ -75,7 +75,7 @@ def main(args):
   train_sess.run(loaded_train_model.embedding_init, {loaded_train_model.embedding_placeholder: embedding})
   for step in range(max_step):
     try:
-      _, loss_t, global_step, batch_size, summaries = loaded_train_model.train(train_sess, args.keep_prob)
+      _, loss_t, global_step, batch_size, summaries = loaded_train_model.train(train_sess, keep_prob)
 
       loss += loss_t * batch_size
       total_reviews += batch_size
