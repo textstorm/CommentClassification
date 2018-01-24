@@ -33,7 +33,7 @@ def get_args():
   parser.add_argument('--batch_size', type=int, default=32, help='Example numbers every batch')
   parser.add_argument('--max_size_cnn', type=int, default=1000, help='max numbers every batch of cnn')
   parser.add_argument('--max_size_rnn', type=int, default=100, help='max numbers every batch of rnn')
-  parser.add_argument('--max_step_rnn', type=int, default=9600, help='max rnn train step')
+  parser.add_argument('--max_step_rnn', type=int, default=16800, help='max rnn train step')
   parser.add_argument('--max_step_cnn', type=int, default=12000, help='max cnn train step')
   parser.add_argument('--learning_rate', type=float, default=0.0005, help='initial learning rate')
   parser.add_argument('--max_grad_norm', type=float, default=10.0, help='max norm of gradient')
