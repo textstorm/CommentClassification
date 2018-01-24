@@ -152,7 +152,7 @@ class TextRNN(Base):
         print self.rnn_state.get_shape().as_list()
 
     with tf.name_scope("output"):
-      pre_score = tf.layers.dense(self.rnn_state, 32, name="pre_scores")
+      pre_score = tf.layers.dense(self.rnn_state, 32, activation=tf.nn.relu, name="pre_scores")
       self.scores = tf.layers.dense(pre_score, self.nb_classes, name="scores")
       self.logits = tf.nn.sigmoid(self.scores)
       self.predictions = tf.argmax(self.scores, 1, name="predictions")
