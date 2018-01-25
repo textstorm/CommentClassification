@@ -153,7 +153,6 @@ def test(args):
   start_time = time.time()
   run_test(args, test_model, test_sess, save_dir)
 
-
 if __name__ == '__main__':
   args = config.get_args()
   main(args)
