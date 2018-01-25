@@ -15,7 +15,7 @@ def get_args():
   parser.add_argument('--rnn_save_dir', type=str, default='save/saves/rnn')
   parser.add_argument('--vocab_dir', type=str, default='data/pre/vocab.txt', help='vocab dir')
   # parser.add_argument('--wordvec_dir', type=str, default='data/glove/glove.840B.300d.txt', help='glove dir')
-  parser.add_argument('--wordvec_dir', type=str, default='data/glove/crawl-300d-2M.vec', help='glove dir')
+  parser.add_argument('--wordvec_dir', type=str, default='data/glove/crawl-300d-2M.vec', help='fasttext dir')
   parser.add_argument('--nb_classes', type=int, default=6, help='class numbers')
   parser.add_argument('--model_type', type=str, default="rnn", help='cnn or rnn')
   parser.add_argument('--rnn_type', type=str, default="bi_rnn", help='rnn or bi-rnn')
