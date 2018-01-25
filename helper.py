@@ -34,7 +34,7 @@ def build_train_model(args, name="train_model", scope=None):
           dataset=dataset,
           vocab_table=vocab_table,
           batch_size=args.batch_size,
-          max_len=args.sentence_length,
+          max_len=None,
           random_seed=args.random_seed,
           shuffle=True)
       model = TextRNN(args, iterator, name=name)
@@ -71,7 +71,7 @@ def build_eval_model(args, name="eval_model", scope=None):
           dataset=dataset,
           vocab_table=vocab_table,
           batch_size=args.max_size_rnn,
-          max_len=args.sentence_length,
+          max_len=None,
           random_seed=args.random_seed,
           shuffle=True)
       model = TextRNN(args, iterator, name=name)
@@ -106,7 +106,7 @@ def build_test_model(args, name="test_model", scope=None):
           dataset=dataset,
           vocab_table=vocab_table,
           batch_size=args.max_size_rnn,
-          max_len=args.sentence_length)
+          max_len=None)
       model = TextRNN(args, iterator, name=name)
     else:
       raise ValueError("Unknown model_type %s" % args.model_type)
