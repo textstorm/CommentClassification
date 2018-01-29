@@ -18,7 +18,6 @@ class Base(object):
     self.optimizer = tf.train.AdamOptimizer(self.learning_rate)
     self.global_step = tf.Variable(0, trainable=False)
 
-    #self.embedding = self._build_embedding(self.vocab_size, self.embed_size, "embedding")
     self.embedding = tf.Variable(tf.constant(0.0, shape=[self.vocab_size, self.embed_size]),
                                  trainable=True, name="embedding")
     self.embedding_placeholder = tf.placeholder(tf.float32, [self.vocab_size, self.embed_size])
@@ -41,10 +40,6 @@ class Base(object):
     if initializer:
       initializer = initializer
     return tf.get_variable(shape=shape, initializer=initializer, name=name)
-
-  def activation_summary(self, summary):
-    tf.summary.histogram('/activation', summary)
-    tf.summary.scalar('/sparsity', tf.nn.zero_fraction(summary))
 
   def train(self, sess, keep_prob):
     return sess.run([self.train_op, 
@@ -101,23 +96,16 @@ class TextCNN(Base):
       self.scores = tf.layers.dense(self.h_drop, self.nb_classes, name="scores")
       self.logits = tf.nn.sigmoid(self.scores)
       self.predictions = tf.argmax(self.scores, 1, name="predictions")
-      self.activation_summary(self.scores)
 
     with tf.name_scope("loss"):
-      l2_lambda = 0.0001
       losses = tf.nn.sigmoid_cross_entropy_with_logits(labels=self.iterator.labels, logits=self.scores)
       self.loss = tf.reduce_mean(losses)
-      # l2_losses = tf.add_n(
-      #     [tf.nn.l2_loss(v) for v in tf.trainable_variables() if 'bias' not in v.name]) * l2_lambda
-      # self.loss = loss + l2_losses
-      tf.summary.scalar("/cross_entropy", self.loss)
 
     with tf.name_scope('train'):
       grads_and_vars = self.optimizer.compute_gradients(self.loss)
       grads_and_vars = [(tf.clip_by_norm(g, self.max_grad_norm), v) for g, v in grads_and_vars]
       self.train_op = self.optimizer.apply_gradients(grads_and_vars, global_step=self.global_step)
 
-    self.summary = tf.summary.merge_all()
     self.saver = tf.train.Saver(tf.global_variables())
 
 class TextRNN(Base):
@@ -149,26 +137,25 @@ class TextRNN(Base):
         if num_layers > 1:
           rnn_state = tuple(rnn_state[0][num_bi_layers - 1], rnn_state[1][num_bi_layers - 1])
         self.rnn_state = tf.concat(rnn_state, -1)
-        print self.rnn_state.get_shape().as_list()
+        rnn_output = tf.concat(rnn_output, -1)
+        self.rnn_output = tf.layers.max_pooling1d(rnn_output, rnn_output.get_shape().as_list()[1], 1)
 
     with tf.name_scope("output"):
-      pre_score = tf.layers.dense(self.rnn_state, 32, activation=tf.nn.relu, name="pre_scores")
+      tmp = tf.reshape(self.rnn_output, [self.batch_size, self.hidden_size])
+      pre_score = tf.layers.dense(tmp, 32, activation=tf.nn.elu, name="pre_scores")
       self.scores = tf.layers.dense(pre_score, self.nb_classes, name="scores")
       self.logits = tf.nn.sigmoid(self.scores)
       self.predictions = tf.argmax(self.scores, 1, name="predictions")
-      self.activation_summary(self.scores)
 
     with tf.name_scope("loss"):
       losses = tf.nn.sigmoid_cross_entropy_with_logits(labels=self.iterator.labels, logits=self.scores)
       self.loss = tf.reduce_mean(losses)
-      tf.summary.scalar("/cross_entropy", self.loss)
 
     with tf.name_scope('train'):
       grads_and_vars = self.optimizer.compute_gradients(self.loss)
       grads_and_vars = [(tf.clip_by_norm(g, self.max_grad_norm), v) for g, v in grads_and_vars]
       self.train_op = self.optimizer.apply_gradients(grads_and_vars, global_step=self.global_step)
 
-    self.summary = tf.summary.merge_all()
     self.saver = tf.train.Saver(tf.global_variables())
 
   def single_cell(self, num_units, keep_prob):
