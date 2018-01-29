@@ -21,22 +21,20 @@ def build_train_model(args, name="train_model", scope=None):
     dataset = tf.data.TextLineDataset(data_dir).skip(1)
 
     if args.model_type == "cnn":
-      iterator = utils.get_iterator(
-          dataset=dataset,
-          vocab_table=vocab_table,
-          batch_size=args.batch_size,
-          max_len=args.sentence_length,
-          random_seed=args.random_seed,
-          shuffle=True)
+      iterator = utils.get_iterator(dataset=dataset,
+                                    vocab_table=vocab_table,
+                                    batch_size=args.batch_size,
+                                    max_len=args.max_len,
+                                    random_seed=args.random_seed,
+                                    shuffle=True)
       model = TextCNN(args, iterator, name=name)
     elif args.model_type == "rnn":
-      iterator = utils.get_iterator(
-          dataset=dataset,
-          vocab_table=vocab_table,
-          batch_size=args.batch_size,
-          max_len=None,
-          random_seed=args.random_seed,
-          shuffle=True)
+      iterator = utils.get_iterator(dataset=dataset,
+                                    vocab_table=vocab_table,
+                                    batch_size=args.batch_size,
+                                    max_len=None,
+                                    random_seed=args.random_seed,
+                                    shuffle=True)
       model = TextRNN(args, iterator, name=name)
     else:
       raise ValueError("Unknown model_type %s" % args.model_type)
@@ -44,8 +42,7 @@ def build_train_model(args, name="train_model", scope=None):
   return TrainModel(graph=graph, model=model, iterator=iterator)
 
 class EvalModel(
-    collections.namedtuple("EvalModel",
-                           ("graph", "model", "iterator"))):
+    collections.namedtuple("EvalModel", ("graph", "model", "iterator"))):
   pass
 
 def build_eval_model(args, name="eval_model", scope=None):
@@ -58,31 +55,27 @@ def build_eval_model(args, name="eval_model", scope=None):
     dataset = tf.data.TextLineDataset(data_dir).skip(1)
 
     if args.model_type == "cnn":
-      iterator = utils.get_iterator(
-          dataset=dataset,
-          vocab_table=vocab_table,
-          batch_size=args.max_size_cnn,
-          max_len=args.sentence_length,
-          random_seed=args.random_seed,
-          shuffle=True)
+      iterator = utils.get_iterator(dataset=dataset,
+                                    vocab_table=vocab_table,
+                                    batch_size=args.max_size_cnn,
+                                    max_len=args.max_len,
+                                    random_seed=args.random_seed,
+                                    shuffle=False)
       model = TextCNN(args, iterator, name=name)
     elif args.model_type == "rnn":
-      iterator = utils.get_iterator(
-          dataset=dataset,
-          vocab_table=vocab_table,
-          batch_size=args.max_size_rnn,
-          max_len=None,
-          random_seed=args.random_seed,
-          shuffle=True)
+      iterator = utils.get_iterator(dataset=dataset,
+                                    vocab_table=vocab_table,
+                                    batch_size=args.max_size_rnn,
+                                    max_len=None,
+                                    random_seed=args.random_seed,
+                                    shuffle=False)
       model = TextRNN(args, iterator, name=name)
     else:
       raise ValueError("Unknown model_type %s" % args.model_type)
 
   return EvalModel(graph=graph, model=model, iterator=iterator)
 
-class TestModel(
-    collections.namedtuple("TestModel",
-                           ("graph", "model", "iterator"))):
+class TestModel(collections.namedtuple("TestModel",("graph", "model", "iterator"))):
   pass
 
 def build_test_model(args, name="test_model", scope=None):
@@ -95,18 +88,16 @@ def build_test_model(args, name="test_model", scope=None):
     dataset = tf.data.TextLineDataset(data_dir).skip(1)
 
     if args.model_type == "cnn":
-      iterator = utils.get_test_iterator(
-          dataset=dataset,
-          vocab_table=vocab_table,
-          batch_size=args.max_size_cnn,
-          max_len=args.sentence_length)
+      iterator = utils.get_test_iterator(dataset=dataset,
+                                        vocab_table=vocab_table,
+                                        batch_size=args.max_size_cnn,
+                                        max_len=args.max_len)
       model = TextCNN(args, iterator, name=name)
     elif args.model_type == "rnn":
-      iterator = utils.get_test_iterator(
-          dataset=dataset,
-          vocab_table=vocab_table,
-          batch_size=args.max_size_rnn,
-          max_len=None)
+      iterator = utils.get_test_iterator(dataset=dataset,
+                                        vocab_table=vocab_table,
+                                        batch_size=args.max_size_rnn,
+                                        max_len=None)
       model = TextRNN(args, iterator, name=name)
     else:
       raise ValueError("Unknown model_type %s" % args.model_type)
