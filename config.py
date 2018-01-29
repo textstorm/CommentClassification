@@ -19,8 +19,7 @@ def get_args():
   parser.add_argument('--rnn_save_dir', type=str, default='save/saves/rnn')
 
   #model
-  parser.add_argument('--model_type', type=str, default="rnn", help='cnn or rnn')
-  parser.add_argument('--rnn_type', type=str, default="bi_rnn", help='rnn or bi-rnn')
+  parser.add_argument('--model_type', type=str, default="rnn", help='cnn,gru,lstm')
   parser.add_argument('--nb_classes', type=int, default=6, help='class numbers')
   parser.add_argument('--max_len', type=int, default=500, help='The length of input x')
   parser.add_argument('--vocab_size', type=int, default=30001, help='data vocab size')
@@ -33,6 +32,7 @@ def get_args():
   parser.add_argument('--max_size_cnn', type=int, default=1000, help='max numbers every batch of cnn')
   parser.add_argument('--max_step_cnn', type=int, default=12000, help='max cnn train step')   
   #rnn
+  parser.add_argument('--cell_type', type=str, default="gru", help='lstm or gru')
   parser.add_argument('--hidden_size', type=int, default=64, help='rnn hidden size')
   parser.add_argument('--rnn_layers', type=int, default=2, help='rnn layers')
   parser.add_argument('--keep_prob_rnn', type=float, default=0.5, help='keep prob in rnn')
