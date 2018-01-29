@@ -58,11 +58,8 @@ def main(args):
         train_model.model, save_dir, train_sess, name="train")
 
   train_sess.run(train_model.iterator.initializer)
-  # summary_writer = tf.summary.FileWriter(log_dir, train_sess.graph)
-
-  loss = 0.
-  total_reviews = 0
   epoch = 1
+  loss, total_reviews = 0., 0
   epoch_start_time = time.time()
   step_start_time = epoch_start_time
 
@@ -73,13 +70,15 @@ def main(args):
   vocab = utils.load_data(args.vocab_dir)
   embedding = utils.load_fasttext(pretrain_dir, vocab)
   train_sess.run(loaded_train_model.embedding_init, {loaded_train_model.embedding_placeholder: embedding})
+  for line in loaded_train_model.tvars:
+    print line
+
   for step in range(max_step):
     try:
-      _, loss_t, global_step, batch_size, summaries = loaded_train_model.train(train_sess, keep_prob)
+      _, loss_t, global_step, batch_size = loaded_train_model.train(train_sess, keep_prob)
 
       loss += loss_t * batch_size
       total_reviews += batch_size
-      # summary_writer.add_summary(summaries, global_step)
 
       if global_step % 100 == 0:
         print "epoch %d, step %d, loss %f, time %.2fs" % \
@@ -96,17 +95,12 @@ def main(args):
     except tf.errors.OutOfRangeError:
       print "epoch %d finish, time %.2fs" % (epoch, time.time() - epoch_start_time)
       print "- " * 50
-      loaded_train_model.saver.save(train_sess,
-                    os.path.join(save_dir, "model.ckpt"), global_step=global_step)      
-      avg_loss = run_valid(args, valid_model, valid_sess, save_dir)
       epoch_time = time.time() - epoch_start_time
       print "%.2f seconds in this epoch" % (epoch_time)
-      print "train loss %f valid loss %f" % (loss / total_reviews, avg_loss)
-
+      print "train loss %f in this epoch" % (loss / total_reviews)
       train_sess.run(train_model.iterator.initializer)
       epoch_start_time = time.time()
-      total_reviews = 0
-      loss = 0.
+      loss, total_reviews = 0., 0
       epoch += 1
       print "Epoch %d start " % (epoch)
       print "- " * 50
