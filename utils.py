@@ -105,9 +105,7 @@ def get_iterator(dataset,
   dataset = dataset.map(lambda x, y: (tf.string_split([x]).values, y))
   dataset = dataset.map(lambda x, y: (tf.cast(vocab_table.lookup(x), tf.int32), y))
   if max_len is not None: dataset = dataset.map(lambda x, y: (pad_sequences(x, max_len), y))
-  else:
-    print "use rnn"
-    dataset = dataset.map(lambda x, y: (deal_rnn_sequence(x), y))
+  else: dataset = dataset.map(lambda x, y: (deal_rnn_sequence(x), y))
   dataset = dataset.map(lambda x, y: (x, tf.cast(y, tf.float32), tf.size(x)))
 
   def batching_func(x):
@@ -156,9 +154,7 @@ def get_test_iterator(dataset,
   dataset = dataset.map(lambda line: tf.cast(vocab_table.lookup(line), tf.int32))
   dataset = dataset.map(lambda line: deal_very_long_test_data(line))
   if max_len is not None: dataset = dataset.map(lambda line: pad_sequences(line, max_len))
-  else:
-    print "use rnn"
-    dataset = dataset.map(lambda x, y: (deal_rnn_sequence(x), y))
+  else: dataset = dataset.map(lambda x, y: (deal_rnn_sequence(x), y))
   dataset = dataset.map(lambda line: (line, tf.cast(line, tf.float32), tf.size(line)))
 
   def batching_func(x):
