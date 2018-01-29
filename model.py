@@ -4,7 +4,7 @@ import numpy as np
 
 class Base(object):
   def __init__(self, args, iterator, name=None):
-    self.sentence_length = args.sentence_length
+    self.max_len = args.max_len
     self.nb_classes = args.nb_classes
     self.vocab_size = args.vocab_size
     self.embed_size = args.embed_size
@@ -45,8 +45,7 @@ class Base(object):
     return sess.run([self.train_op, 
                      self.loss,
                      self.global_step,
-                     self.batch_size,
-                     self.summary], 
+                     self.batch_size], 
                      feed_dict={self.keep_prob: keep_prob})
 
   def test(self, sess, keep_prob):
@@ -79,7 +78,7 @@ class TextCNN(Base):
         conv = tf.layers.batch_normalization(conv)
         hidden = tf.nn.relu(conv + bias)
         pool = tf.nn.max_pool(value=hidden,
-                              ksize=[1, self.sentence_length - filter_size + 1, 1, 1],
+                              ksize=[1, self.max_len - filter_size + 1, 1, 1],
                               strides=[1, 1, 1, 1],
                               padding="VALID",
                               name="pooling")
@@ -113,35 +112,26 @@ class TextRNN(Base):
     super(TextRNN, self).__init__(args=args, iterator=iterator, name=name)
     self.hidden_size = args.hidden_size
     self.model_type = args.model_type
-    self.rnn_type = args.rnn_type
+    self.cell_type = args.cell_type
     self.rnn_layers = args.rnn_layers
 
     with tf.variable_scope("rnn"):
-      if self.rnn_type == "rnn":
-        cell = self.build_rnn_cell(self.hidden_size, self.rnn_layers, self.keep_prob)
-        rnn_output, rnn_state = tf.nn.dynamic_rnn(cell=cell, 
-                                                  inputs=self.embed_inp, 
-                                                  dtype=tf.float32,
-                                                  sequence_length=self.iterator.sentence_length)
-        self.rnn_state = rnn_state
-
-      elif self.rnn_type == "bi_rnn":
-        num_layers = self.rnn_layers // 2
-        fw_cell = self.build_rnn_cell(self.hidden_size, num_layers, self.keep_prob)
-        bw_cell = self.build_rnn_cell(self.hidden_size, num_layers, self.keep_prob)
-        rnn_output, rnn_state = tf.nn.bidirectional_dynamic_rnn(cell_fw=fw_cell, 
-                                                                cell_bw=bw_cell, 
-                                                                inputs=self.embed_inp,
-                                                                dtype=tf.float32, 
-                                                                sequence_length=self.iterator.sentence_length)
-        if num_layers > 1:
-          rnn_state = tuple(rnn_state[0][num_bi_layers - 1], rnn_state[1][num_bi_layers - 1])
-        self.rnn_state = tf.concat(rnn_state, -1)
-        rnn_output = tf.concat(rnn_output, -1)
-        self.rnn_output = tf.layers.max_pooling1d(rnn_output, rnn_output.get_shape().as_list()[1], 1)
+      num_layers = self.rnn_layers // 2
+      fw_cell = self.build_rnn_cell(self.hidden_size, num_layers, self.keep_prob)
+      bw_cell = self.build_rnn_cell(self.hidden_size, num_layers, self.keep_prob)
+      rnn_output, rnn_state = tf.nn.bidirectional_dynamic_rnn(cell_fw=fw_cell, 
+                                                              cell_bw=bw_cell, 
+                                                              inputs=self.embed_inp,
+                                                              dtype=tf.float32,
+                                                              sequence_length=self.iterator.sentence_length)
+      if num_layers > 1:
+        rnn_state = tuple(rnn_state[0][num_bi_layers - 1], rnn_state[1][num_bi_layers - 1])
+      self.rnn_state = tf.concat(rnn_state, -1)
+      rnn_output = tf.concat(rnn_output, -1)
+      self.rnn_output = tf.layers.max_pooling1d(rnn_output, self.max_len, 1)
 
     with tf.name_scope("output"):
-      tmp = tf.reshape(self.rnn_output, [self.batch_size, self.hidden_size])
+      tmp = tf.reshape(self.rnn_output, [self.batch_size, self.hidden_size * 2])
       pre_score = tf.layers.dense(tmp, 32, activation=tf.nn.elu, name="pre_scores")
       self.scores = tf.layers.dense(pre_score, self.nb_classes, name="scores")
       self.logits = tf.nn.sigmoid(self.scores)
@@ -156,11 +146,15 @@ class TextRNN(Base):
       grads_and_vars = [(tf.clip_by_norm(g, self.max_grad_norm), v) for g, v in grads_and_vars]
       self.train_op = self.optimizer.apply_gradients(grads_and_vars, global_step=self.global_step)
 
+    self.tvars = tf.trainable_variables()
     self.saver = tf.train.Saver(tf.global_variables())
 
   def single_cell(self, num_units, keep_prob):
     """ single cell """
     cell = tf.contrib.rnn.GRUCell(num_units=num_units)
+    if self.cell_type == "lstm":
+      print "use lstm"
+      cell = tf.contrib.rnn.LSTMCell(num_units=num_units)
     cell = tf.contrib.rnn.DropoutWrapper(cell=cell, input_keep_prob=keep_prob)
     return cell
 
@@ -169,7 +163,6 @@ class TextRNN(Base):
     for i in range(num_layers):
       cell = self.single_cell(num_units, keep_prob)
       cell_list.append(cell)
-
     if num_layers == 1:
       return cell_list[0]
     else:
