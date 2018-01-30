@@ -34,12 +34,11 @@ def _run_valid(model, global_step, sess, iterator):
 def main(args):
   #dir
   pretrain_dir = args.wordvec_dir
+  save_dir = os.path.join(args.save_dir, args.model_type)
   if args.model_type == "cnn": 
-    save_dir = args.cnn_save_dir
     max_step = args.max_step_cnn
     keep_prob = args.keep_prob_cnn
-  elif args.model_type == "rnn": 
-    save_dir = args.rnn_save_dir
+  elif args.model_type in ["rnn", "attention"]: 
     max_step = args.max_step_rnn
     keep_prob = args.keep_prob_rnn
 
