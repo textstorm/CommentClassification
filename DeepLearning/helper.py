@@ -6,7 +6,7 @@ import utils
 import time
 
 from tensorflow.python.ops import lookup_ops
-from model import TextCNN, TextRNN, Base
+from model import TextCNN, TextRNN, Base, RNNWithAttention
 
 class TrainModel(collections.namedtuple("TrainModel", ("graph", "model", "iterator"))):
   pass
@@ -28,14 +28,17 @@ def build_train_model(args, name="train_model", scope=None):
                                     random_seed=args.random_seed,
                                     shuffle=True)
       model = TextCNN(args, iterator, name=name)
-    elif args.model_type == "rnn":
+    elif args.model_type in ["rnn", "attention"]:
       iterator = utils.get_iterator(dataset=dataset,
                                     vocab_table=vocab_table,
                                     batch_size=args.batch_size,
-                                    max_len=args.max_len,
+                                    max_len=None,
                                     random_seed=args.random_seed,
                                     shuffle=True)
-      model = TextRNN(args, iterator, name=name)
+      if args.model_type == "rnn":
+        model = TextRNN(args, iterator, name=name)
+      elif args.model_type == "attention":
+        model = RNNWithAttention(args, iterator, name=name)
     else:
       raise ValueError("Unknown model_type %s" % args.model_type)
 
@@ -62,14 +65,17 @@ def build_eval_model(args, name="eval_model", scope=None):
                                     random_seed=args.random_seed,
                                     shuffle=False)
       model = TextCNN(args, iterator, name=name)
-    elif args.model_type == "rnn":
+    elif args.model_type in ["rnn", "attention"]:
       iterator = utils.get_iterator(dataset=dataset,
                                     vocab_table=vocab_table,
                                     batch_size=args.max_size_rnn,
-                                    max_len=args.max_len,
+                                    max_len=None,
                                     random_seed=args.random_seed,
                                     shuffle=False)
-      model = TextRNN(args, iterator, name=name)
+      if args.model_type == "rnn":
+        model = TextRNN(args, iterator, name=name)
+      elif args.model_type == "attention":
+        model = RNNWithAttention(args, iterator, name=name)
     else:
       raise ValueError("Unknown model_type %s" % args.model_type)
 
@@ -93,13 +99,15 @@ def build_test_model(args, name="test_model", scope=None):
                                         batch_size=args.max_size_cnn,
                                         max_len=args.max_len)
       model = TextCNN(args, iterator, name=name)
-    elif args.model_type == "rnn":
+    elif args.model_type in ["rnn", "attention"]:
       iterator = utils.get_test_iterator(dataset=dataset,
                                         vocab_table=vocab_table,
                                         batch_size=args.max_size_rnn,
-                                        max_len=args.max_len)
-                                        #max_len=None)
-      model = TextRNN(args, iterator, name=name)
+                                        max_len=None)
+      if args.model_type == "rnn":
+        model = TextRNN(args, iterator, name=name)
+      elif args.model_type == "attention":
+        model = RNNWithAttention(args, iterator, name=name)
     else:
       raise ValueError("Unknown model_type %s" % args.model_type)
 
