@@ -68,7 +68,7 @@ def pad_sequences(sequence, max_len):
 
 def deal_rnn_sequence(sequence, max_len=500):
   seq_len = tf.size(sequence)
-  sequence = tf.cond(seq_len > max_len, 
+  sequence = tf.cond(seq_len > max_len,
                      lambda: tf.slice(sequence, [seq_len - max_len], [max_len]),
                      lambda: sequence)
   return sequence
