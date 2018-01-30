@@ -10,6 +10,8 @@ class Base(object):
     self.embed_size = args.embed_size
     self.max_grad_norm = args.max_grad_norm
 
+    self.cell_type = args.cell_type
+
     self.iterator = iterator
     self.keep_prob = tf.placeholder(tf.float32, name="keep_prob")
 
@@ -54,6 +56,24 @@ class Base(object):
 
   def get_logits(self, sess, keep_prob):
     return sess.run(self.logits, feed_dict={self.keep_prob: keep_prob})
+
+  def single_cell(self, num_units, keep_prob):
+    """ single cell """
+    cell = tf.contrib.rnn.GRUCell(num_units=num_units)
+    if self.cell_type == "lstm":
+      cell = tf.contrib.rnn.LSTMCell(num_units=num_units)
+    cell = tf.contrib.rnn.DropoutWrapper(cell=cell, input_keep_prob=keep_prob)
+    return cell
+
+  def build_rnn_cell(self, num_units, num_layers, keep_prob=1.0):
+    cell_list = []
+    for i in range(num_layers):
+      cell = self.single_cell(num_units, keep_prob)
+      cell_list.append(cell)
+    if num_layers == 1:
+      return cell_list[0]
+    else:
+      return tf.contrib.rnn.MultiRNNCell(cell_list)
 
 class TextCNN(Base):
   def __init__(self, args, iterator, name=None):
@@ -149,21 +169,68 @@ class TextRNN(Base):
     self.tvars = tf.trainable_variables()
     self.saver = tf.train.Saver(tf.global_variables())
 
-  def single_cell(self, num_units, keep_prob):
-    """ single cell """
-    cell = tf.contrib.rnn.GRUCell(num_units=num_units)
-    if self.cell_type == "lstm":
-      print "use lstm"
-      cell = tf.contrib.rnn.LSTMCell(num_units=num_units)
-    cell = tf.contrib.rnn.DropoutWrapper(cell=cell, input_keep_prob=keep_prob)
-    return cell
+class RNNWithAttention(Base):
+  def __init__(self, args, iterator, name=None):
+    super(RNNWithAttention, self).__init__(args=args, iterator=iterator, name=name)
+    self.hidden_size = args.hidden_size
+    self.model_type = args.model_type
+    self.rnn_layers = args.rnn_layers
+    self.attention_size = args.attention_size
 
-  def build_rnn_cell(self, num_units, num_layers, keep_prob=1.0):
-    cell_list = []
-    for i in range(num_layers):
-      cell = self.single_cell(num_units, keep_prob)
-      cell_list.append(cell)
-    if num_layers == 1:
-      return cell_list[0]
+    with tf.variable_scope("rnn"):
+      num_layers = self.rnn_layers // 2
+      fw_cell = self.build_rnn_cell(self.hidden_size, num_layers, self.keep_prob)
+      bw_cell = self.build_rnn_cell(self.hidden_size, num_layers, self.keep_prob)
+      rnn_output, rnn_state = tf.nn.bidirectional_dynamic_rnn(cell_fw=fw_cell,
+                                                              cell_bw=bw_cell, 
+                                                              inputs=self.embed_inp,
+                                                              dtype=tf.float32,
+                                                              sequence_length=self.iterator.sentence_length)
+
+      rnn_output = tf.concat(rnn_output, -1)
+      print rnn_output.get_shape().as_list()
+      self.attention_output, alphas = self.attention(rnn_output, self.attention_size, return_alphas=True)
+
+    with tf.name_scope("output"):
+      W = tf.Variable(tf.truncated_normal([self.hidden_size * 2, 1], stddev=0.1))
+      b = tf.Variable(tf.constant(0., shape=[1]))
+      self.scores = tf.nn.xw_plus_b(self.attention_output, W, b)
+      # self.scores = tf.layers.dense(self.attention_output, self.nb_classes, name="scores")
+      self.logits = tf.nn.sigmoid(self.scores)
+      print self.logits.get_shape().as_list()
+      self.predictions = tf.argmax(self.scores, 1, name="predictions")
+
+    with tf.name_scope("loss"):
+      losses = tf.nn.sigmoid_cross_entropy_with_logits(labels=self.iterator.labels, logits=self.scores)
+      self.loss = tf.reduce_mean(losses)
+
+    with tf.name_scope('train'):
+      grads_and_vars = self.optimizer.compute_gradients(self.loss)
+      grads_and_vars = [(tf.clip_by_norm(g, self.max_grad_norm), v) for g, v in grads_and_vars]
+      self.train_op = self.optimizer.apply_gradients(grads_and_vars, global_step=self.global_step)
+
+    self.tvars = tf.trainable_variables()
+    self.saver = tf.train.Saver(tf.global_variables())
+
+  def attention(self, inputs, attention_size, return_alphas=False):
+    if isinstance(inputs, tuple):
+      inputs = tf.concat(inputs, 2)
+
+    hidden_size = inputs.shape[2].value
+    W_omega = tf.Variable(tf.random_normal([hidden_size, attention_size], stddev=0.1))
+    b_omega = tf.Variable(tf.random_normal([attention_size], stddev=0.1))
+    u_omega = tf.Variable(tf.random_normal([attention_size], stddev=0.1))
+
+    # Applying fully connected layer with non-linear activation to each of the B*T timestamps;
+    #  the shape of `v` is (B,T,D)*(D,A)=(B,T,A), where A=attention_size
+    v = tf.tanh(tf.tensordot(inputs, W_omega, axes=1) + b_omega)
+    # For each of the timestamps its vector of size A from `v` is reduced with `u` vector
+    vu = tf.tensordot(v, u_omega, axes=1)   # (B,T) shape
+    alphas = tf.nn.softmax(vu)              # (B,T) shape also
+
+    # Output of (Bi-)RNN is reduced with attention vector; the result has (B,D) shape
+    output = tf.reduce_sum(inputs * tf.expand_dims(alphas, -1), 1)
+    if not return_alphas:
+      return output
     else:
-      return tf.contrib.rnn.MultiRNNCell(cell_list)
+      return output, alphas
