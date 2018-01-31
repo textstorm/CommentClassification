@@ -179,9 +179,9 @@ class TextRNN(Base):
       self.predictions = tf.argmax(self.scores, 1, name="predictions")
 
     with tf.name_scope("loss"):
-      losses = self.roc_auc_score(y_pred=self.scores, y_true=self.iterator.labels)
+      # losses = self.roc_auc_score(y_pred=self.scores, y_true=self.iterator.labels)
       # losses = tf.nn.sigmoid_cross_entropy_with_logits(labels=self.iterator.labels, logits=self.scores)
-      self.loss = tf.reduce_mean(losses)
+      # self.loss = tf.reduce_mean(losses)
 
     with tf.name_scope('train'):
       grads_and_vars = self.optimizer.compute_gradients(self.loss)
