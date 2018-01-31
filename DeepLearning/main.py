@@ -7,6 +7,7 @@ import helper
 import pandas as pd
 import numpy as np
 import tensorflow as tf
+from scipy.special import logit, expit
 
 os.environ["CUDA_VISIBLE_DEVICES"] = "0"
 
@@ -20,16 +21,21 @@ def run_valid(args, valid_model, valid_sess, model_dir):
 def _run_valid(model, global_step, sess, iterator):
   sess.run(iterator.initializer)
   total_loss, data_size = 0., 0
+  total_logits = []
+  total_labels = []
   while True:
     try:
-      loss_t, batch_size = model.test(sess, 1.)
+      loss_t, logits_t, labels_t, batch_size = model.test(sess, 1.)
       total_loss += loss_t * batch_size
+      total_logits += logits_t.tolist()
+      total_labels += labels_t.tolist()
       data_size += batch_size
     except tf.errors.OutOfRangeError:
       break
 
   avg_loss = total_loss / data_size
-  return avg_loss
+  total_labels, total_logits = np.array(total_labels), np.array(total_logits)
+  return avg_loss, total_labels, total_logits
 
 def main(args):
   #dir
@@ -87,8 +93,12 @@ def main(args):
       if global_step % 1000 == 0:
         loaded_train_model.saver.save(train_sess,
             os.path.join(save_dir, "model.ckpt"), global_step=global_step)   
-        avg_loss = run_valid(args, valid_model, valid_sess, save_dir)
-        print "valid loss %f after train step %d" % (avg_loss, global_step)
+        avg_loss, total_labels, total_logits = run_valid(args, valid_model, valid_sess, save_dir)
+        auc = tf.metrics.auc(labels=total_labels, predictions=total_logits)
+        with tf.Session(config=config_proto) as sess:
+          sess.run(tf.local_variables_initializer())
+          auc = sess.run(auc)
+        print "valid loss %f valid auc %f after train step %d" % (avg_loss, auc, global_step)
         step_start_time = time.time()        
 
     except tf.errors.OutOfRangeError:
@@ -134,11 +144,7 @@ def write_results(logits):
   data.to_csv(args.sub_dir, index=False)
 
 def test(args):
-  if args.model_type == "cnn": 
-    save_dir = args.cnn_save_dir
-  elif args.model_type == "rnn": 
-    save_dir = args.rnn_save_dir
-
+  save_dir = os.path.join(args.save_dir, args.model_type)
   test_model = helper.build_test_model(args)
   config_proto = utils.get_config_proto()
   test_sess = tf.Session(config=config_proto, graph=test_model.graph)
@@ -146,7 +152,20 @@ def test(args):
   start_time = time.time()
   run_test(args, test_model, test_sess, save_dir)
 
+def valid(args):
+  save_dir = os.path.join(args.save_dir, args.model_type)
+  valid_model = helper.build_eval_model(args)
+  config_proto = utils.get_config_proto()
+  valid_sess = tf.Session(config=config_proto, graph=valid_model.graph)
+  avg_loss, total_labels, total_logits = run_valid(args, valid_model, valid_sess, save_dir)
+  auc = tf.metrics.auc(labels=total_labels, predictions=total_logits)
+  with tf.Session(config=config_proto) as sess:
+    sess.run(tf.local_variables_initializer())
+    auc = sess.run(auc)
+  print "valid loss %f valid auc %f" % (avg_loss, auc[1])
+
 if __name__ == '__main__':
   args = config.get_args()
   main(args)
   test(args)
+  # valid(args)
