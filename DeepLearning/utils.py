@@ -154,7 +154,7 @@ def get_test_iterator(dataset,
   dataset = dataset.map(lambda line: tf.cast(vocab_table.lookup(line), tf.int32))
   dataset = dataset.map(lambda line: deal_very_long_test_data(line))
   if max_len is not None: dataset = dataset.map(lambda line: pad_sequences(line, max_len))
-  else: dataset = dataset.map(lambda x, y: (deal_rnn_sequence(x), y))
+  else: dataset = dataset.map(lambda line: deal_rnn_sequence(line))
   dataset = dataset.map(lambda line: (line, tf.cast(line, tf.float32), tf.size(line)))
 
   def batching_func(x):
