@@ -98,7 +98,7 @@ def main(args):
         with tf.Session(config=config_proto) as sess:
           sess.run(tf.local_variables_initializer())
           auc = sess.run(auc)
-        print "valid loss %f valid auc %f after train step %d" % (avg_loss, auc, global_step)
+        print "valid loss %f valid auc %f after train step %d" % (avg_loss, auc[1], global_step)
         step_start_time = time.time()        
 
     except tf.errors.OutOfRangeError:
