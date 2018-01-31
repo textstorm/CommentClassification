@@ -1,5 +1,6 @@
 
 import tensorflow as tf
+import tensorflow.contrib.layers as layers
 import numpy as np
 
 class Base(object):
@@ -51,7 +52,10 @@ class Base(object):
                      feed_dict={self.keep_prob: keep_prob})
 
   def test(self, sess, keep_prob):
-    return sess.run([self.loss, self.batch_size], 
+    return sess.run([self.loss, 
+                     self.logits, 
+                     self.iterator.labels,
+                     self.batch_size], 
                     feed_dict={self.keep_prob: keep_prob})
 
   def get_logits(self, sess, keep_prob):
@@ -74,6 +78,23 @@ class Base(object):
       return cell_list[0]
     else:
       return tf.contrib.rnn.MultiRNNCell(cell_list)
+
+  def roc_auc_score(self, y_pred, y_true):
+    """ ROC AUC Score. tflearn
+    """
+    with tf.name_scope("RocAucScore"):
+      pos = tf.boolean_mask(y_pred, tf.cast(y_true, tf.bool))
+      neg = tf.boolean_mask(y_pred, ~tf.cast(y_true, tf.bool))
+
+      pos = tf.expand_dims(pos, 0)
+      neg = tf.expand_dims(neg, 1)
+
+      gamma = 0.2
+      p     = 3
+
+      difference = tf.zeros_like(pos * neg) + pos - neg - gamma
+      masked = tf.boolean_mask(difference, difference < 0.0)
+      return tf.reduce_sum(tf.pow(-masked, p))
 
 class TextCNN(Base):
   def __init__(self, args, iterator, name=None):
@@ -158,7 +179,8 @@ class TextRNN(Base):
       self.predictions = tf.argmax(self.scores, 1, name="predictions")
 
     with tf.name_scope("loss"):
-      losses = tf.nn.sigmoid_cross_entropy_with_logits(labels=self.iterator.labels, logits=self.scores)
+      losses = self.roc_auc_score(y_pred=self.scores, y_true=self.iterator.labels)
+      # losses = tf.nn.sigmoid_cross_entropy_with_logits(labels=self.iterator.labels, logits=self.scores)
       self.loss = tf.reduce_mean(losses)
 
     with tf.name_scope('train'):
@@ -212,7 +234,19 @@ class RNNWithAttention(Base):
     self.tvars = tf.trainable_variables()
     self.saver = tf.train.Saver(tf.global_variables())
 
-  def attention(self, inputs, attention_size, return_alphas=False):
+  def attention(self, inputs, size, return_alphas=False):
+    attention_context_vector = tf.get_variable(name='attention_context_vector', shape=[size], dtype=tf.float32)
+    input_projection = layers.fully_connected(inputs, size, activation_fn=tf.tanh)
+    vector_attn = tf.reduce_sum(tf.multiply(input_projection, attention_context_vector), axis=2, keep_dims=True)
+    attention_weights = tf.nn.softmax(vector_attn, dim=1)
+    weighted_projection = tf.multiply(inputs, attention_weights)
+    outputs = tf.reduce_sum(weighted_projection, axis=1)
+    if not return_alphas:
+      return outputs
+    else:
+      return outputs, attention_weights
+
+  def attention1(self, inputs, attention_size, return_alphas=False):
     if isinstance(inputs, tuple):
       inputs = tf.concat(inputs, 2)
 
@@ -221,14 +255,11 @@ class RNNWithAttention(Base):
     b_omega = tf.Variable(tf.random_normal([attention_size], stddev=0.1))
     u_omega = tf.Variable(tf.random_normal([attention_size], stddev=0.1))
 
-    # Applying fully connected layer with non-linear activation to each of the B*T timestamps;
-    #  the shape of `v` is (B,T,D)*(D,A)=(B,T,A), where A=attention_size
     v = tf.tanh(tf.tensordot(inputs, W_omega, axes=1) + b_omega)
-    # For each of the timestamps its vector of size A from `v` is reduced with `u` vector
+
     vu = tf.tensordot(v, u_omega, axes=1)   # (B,T) shape
     alphas = tf.nn.softmax(vu)              # (B,T) shape also
 
-    # Output of (Bi-)RNN is reduced with attention vector; the result has (B,D) shape
     output = tf.reduce_sum(inputs * tf.expand_dims(alphas, -1), 1)
     if not return_alphas:
       return output
