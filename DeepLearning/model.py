@@ -153,7 +153,6 @@ class TextRNN(Base):
     super(TextRNN, self).__init__(args=args, iterator=iterator, name=name)
     self.hidden_size = args.hidden_size
     self.model_type = args.model_type
-    self.cell_type = args.cell_type
     self.rnn_layers = args.rnn_layers
 
     with tf.variable_scope("rnn"):
