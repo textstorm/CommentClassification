@@ -20,19 +20,22 @@ def build_train_model(args, name="train_model", scope=None):
     vocab_table = lookup_ops.index_table_from_file(vocab_dir, default_value=0) #default_value can also be -1
     dataset = tf.data.TextLineDataset(data_dir).skip(1)
 
+    max_len = args.max_len
     if args.model_type == "cnn":
       iterator = utils.get_iterator(dataset=dataset,
                                     vocab_table=vocab_table,
                                     batch_size=args.batch_size,
-                                    max_len=args.max_len,
+                                    max_len=max_len,
                                     random_seed=args.random_seed,
                                     shuffle=True)
       model = TextCNN(args, iterator, name=name)
     elif args.model_type in ["rnn", "attention"]:
+      if not args.ispool:
+        max_len = None
       iterator = utils.get_iterator(dataset=dataset,
                                     vocab_table=vocab_table,
                                     batch_size=args.batch_size,
-                                    max_len=None,
+                                    max_len=max_len,
                                     random_seed=args.random_seed,
                                     shuffle=True)
       if args.model_type == "rnn":
