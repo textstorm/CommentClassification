@@ -23,9 +23,7 @@ class Base(object):
     self.global_step = tf.Variable(0, trainable=False)
 
     self.embedding = self._build_embedding(self.vocab_size, self.embed_size, "encoder_embedding")
-    print "embedding shape: ", self.embedding.get_shape().as_list()
     self.embed_inp = tf.nn.embedding_lookup(self.embedding, self.input_x)
-    print "embedding input shape: ", self.embed_inp.get_shape().as_list()
 
     # self.embedding = tf.Variable(tf.constant(0.0, shape=[self.vocab_size, self.embed_size]),
     #                              trainable=True, name="embedding")
@@ -188,7 +186,6 @@ class TextRNN(Base):
       self.scores = tf.layers.dense(pre_score, self.nb_classes, name="scores")
       self.scores = tf.reshape(self.scores, [-1])
       self.logits = tf.nn.sigmoid(self.scores)
-      print self.logits.get_shape().as_list()
 
     with tf.name_scope("loss"):
       losses = tf.nn.sigmoid_cross_entropy_with_logits(logits=self.scores, labels=self.input_y)
@@ -209,7 +206,6 @@ class TextFNN(Base):
     with tf.variable_scope("fnn"):
       embed_inp = tf.reshape(self.embed_inp, [-1, 20000])
       self.state = tf.layers.dense(embed_inp, self.hidden_size)
-      print self.state.get_shape().as_list()
 
     with tf.name_scope("output"):
       self.scores = tf.layers.dense(self.state, self.nb_classes, name="scores")
