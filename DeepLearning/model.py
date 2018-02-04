@@ -171,16 +171,16 @@ class TextRNN(Base):
       self.rnn_output = tf.layers.max_pooling1d(rnn_output, self.max_len, 1)
 
     with tf.name_scope("output"):
-      tmp = tf.reshape(self.rnn_output, [self.batch_size, self.hidden_size * 2])
-      pre_score = tf.layers.dense(tmp, 32, activation=tf.nn.elu, name="pre_scores")
+      # tmp = tf.reshape(self.rnn_output, [self.batch_size, self.hidden_size * 2])
+      pre_score = tf.layers.dense(self.rnn_state, 32, activation=tf.nn.elu, name="pre_scores")
       self.scores = tf.layers.dense(pre_score, self.nb_classes, name="scores")
       self.logits = tf.nn.sigmoid(self.scores)
       self.predictions = tf.argmax(self.scores, 1, name="predictions")
 
     with tf.name_scope("loss"):
       # losses = self.roc_auc_score(y_pred=self.scores, y_true=self.iterator.labels)
-      # losses = tf.nn.sigmoid_cross_entropy_with_logits(labels=self.iterator.labels, logits=self.scores)
-      # self.loss = tf.reduce_mean(losses)
+      losses = tf.nn.sigmoid_cross_entropy_with_logits(labels=self.iterator.labels, logits=self.scores)
+      self.loss = tf.reduce_mean(losses)
 
     with tf.name_scope('train'):
       grads_and_vars = self.optimizer.compute_gradients(self.loss)
