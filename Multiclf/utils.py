@@ -78,7 +78,7 @@ def get_batchidx(n_data, batch_size, shuffle=True):
     batch_index.append(idx_list[start_idx: min(start_idx + batch_size, n_data)])
   return batch_index
 
-def get_batches(sentences, labels, batch_size, max_len=400, type="cnn"):
+def get_batches(sentences, labels, batch_size, max_len=None, type="cnn"):
   """
     read all data into ram once
   """
@@ -87,6 +87,22 @@ def get_batches(sentences, labels, batch_size, max_len=400, type="cnn"):
   for minibatch in minibatches:
     seq_batch = [sentences[t] for t in minibatch]
     lab_batch = [labels[t] for t in minibatch]
+    if type == "cnn":
+      seq = tf.keras.preprocessing.sequence.pad_sequences(seq_batch, max_len)
+      seq_len = [max_len] * batch_size
+    elif type == "rnn":
+      seq, seq_len = padding_data_for_rnn(seq_batch)
+    all_batches.append((seq, seq_len, lab_batch))
+  return all_batches
+
+def get_test_batches(sentences, batch_size, max_len=None, type="cnn"):
+  """
+    load test data
+  """
+  minibatches = get_batchidx(len(sentences), batch_size, shuffle=False)
+  all_batches = []
+  for minibatch in minibatches:
+    seq_batch = [sentences[t] for t in minibatch]
     if type == "cnn":
       seq = tf.keras.preprocessing.sequence.pad_sequences(seq_batch, max_len)
       seq_len = [max_len] * batch_size
@@ -110,3 +126,26 @@ def one_hot(labels, nb_classes=None):
   for i in range(len(labels)):
     onehot_labels[i, labels[i]] = 1.
   return onehot_labels
+
+def load_model(model, ckpt, session, name):
+  start_time = time.time()
+  model.saver.restore(session, ckpt)
+  session.run(tf.tables_initializer())
+  utils.print_out(
+      "loaded %s model parameters from %s, time %.2fs" %
+      (name, ckpt, time.time() - start_time))
+  return model
+
+def create_or_load_model(model, model_dir, session, name):
+  latest_ckpt = tf.train.latest_checkpoint(model_dir)
+  if latest_ckpt:
+    model = load_model(model, latest_ckpt, session, name)
+  else:
+    start_time = time.time()
+    session.run(tf.global_variables_initializer())
+    session.run(tf.tables_initializer())
+    utils.print_out("created %s model with fresh parameters, time %.2fs" %
+        (name, time.time() - start_time))
+
+  global_step = model.global_step.eval(session=session)
+  return model, global_step
