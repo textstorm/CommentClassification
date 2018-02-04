@@ -16,7 +16,6 @@ def main(args):
   train = pd.read_csv(args.train_dir)
   x_train = train["comment_text"]
   target_cols = ['toxic', 'severe_toxic', 'obscene', 'threat', 'insult', 'identity_hate']
-  preds = []
 
   x = []
   for line in x_train:
@@ -42,10 +41,10 @@ def main(args):
   if not os.path.exists(save_dir):
     os.makedirs(save_dir)
 
-  with tf.Graph().as_default():
-    config_proto = utils.get_config_proto()
-    sess = tf.Session(config=config_proto)
-    for col in target_cols:
+  for col in target_cols:
+    with tf.Graph().as_default():
+      config_proto = utils.get_config_proto()
+      sess = tf.Session(config=config_proto)
       y = train[col].tolist()
       x_train, x_eval, y_train, y_eval = train_test_split(
           x_vector, y, test_size=0.2, shuffle=True, random_state=2018, stratify=y)
@@ -63,11 +62,11 @@ def main(args):
         print "epoch %d start" % epoch, "\n", "- " * 50
         loss, total_comments = 0., 0
         if args.model_type in ["cnn", "fnn"]:
-          train_batch = utils.get_batches(x_train, y_train, args.batch_size)
-          test_batch = utils.get_batches(x_eval, y_eval, args.max_size_cnn)
+          train_batch = utils.get_batches(x_train, y_train, args.batch_size, args.max_len)
+          test_batch = utils.get_batches(x_eval, y_eval, args.max_size_cnn, args.max_len)
         elif args.model_type in ["rnn"]:
-          train_batch = utils.get_batches(x_train, y_train, args.batch_size, type="rnn")
-          test_batch = utils.get_batches(x_eval, y_eval, args.max_size_rnn, type="rnn")
+          train_batch = utils.get_batches(x_train, y_train, args.batch_size, args.max_len, type="rnn")
+          test_batch = utils.get_batches(x_eval, y_eval, args.max_size_rnn, args.max_len, type="rnn")
 
         epoch_start_time = time.time()
         step_start_time = epoch_start_time
@@ -83,17 +82,22 @@ def main(args):
             print "epoch %d, step %d, loss %f, time %.2fs" % \
               (epoch, global_step, loss_t, time.time() - step_start_time)
             run_valid(test_batch, model, sess)
-            model.saver.save(sess, os.path.join(save_dir, ("%s-model.ckpt" % col)), global_step=global_step)  
+            thismodel_dir = os.path.join(save_dir, col)
+            if not os.path.exists(thismodel_dir):
+              os.makedirs(thismodel_dir)
+            model.saver.save(sess, os.path.join(thismodel_dir, ("%s-model.ckpt" % col)), 
+                global_step=global_step)  
             step_start_time = time.time()
 
           if global_step > 400:
             break
 
+        if global_step > 400:
+          break
+
         epoch_time = time.time() - epoch_start_time
         print "%.2f seconds in this epoch" % (epoch_time)
         print "train loss %f" % (loss / total_comments)
-
-      # all epoch finish
 
 def run_valid(test_data, model, sess):
   loss, total_comments = 0., 0
@@ -104,20 +108,67 @@ def run_valid(test_data, model, sess):
     loss += loss_t * batch_size
   print "loss %f in %d test comments" % (loss / total_comments, total_comments)  
 
-# def run_test(args, model, global_step, sess, iterator):
-#   sess.run(iterator.initializer)
-#   total_logits = []
-#   while True:
-#     try:
-#       logits = model.get_logits(sess, 1.).tolist()
-#       total_logits += logits
-#     except tf.errors.OutOfRangeError:
-#       break
-#   print np.array(total_logits).shape
+def test(args):
+  save_dir = os.path.join(args.save_dir, args.model_type)
+  test = pd.read_csv(args.test_dir)
+  x_test = test["comment_text"]
+  print x_test.head()
+  target_cols = ['toxic', 'severe_toxic', 'obscene', 'threat', 'insult', 'identity_hate']
 
-# def test(args):
-#   test = pd.read_csv(args.valid_dir)
+  x = []
+  for line in x_test:
+    if len(line) > 0:
+      x.append(utils.review_to_wordlist(line.strip()))
+  print "loaded %d comments from dataset" % len(x)
+  print x[1]
+
+  index2word, word2index = utils.load_vocab(args.vocab_dir)
+  print index2word[:10]
+  x_vector = utils.vectorize(x, word2index, verbose=True)
+  print x_vector[1]
+
+  target_cols = ['toxic', 'severe_toxic', 'obscene', 'threat', 'insult', 'identity_hate']
+  if args.model_type in ["cnn", "fnn"]:
+    test_batch = utils.get_test_batches(x_train, y_train, args.max_size_cnn, args.max_len)
+  elif args.model_type in ["rnn"]:
+    test_batch = utils.get_test_batches(x_eval, y_eval, args.max_size_rnn, type="rnn")
+
+  preds = np.zeros((test.shape[0], len(target_cols)))
+  for i, col in enumerate(target_cols):
+    with tf.Graph().as_default():
+      config_proto = utils.get_config_proto()
+      sess = tf.Session(config=config_proto)
+
+      if args.model_type == "cnn":
+        model = TextCNN(args, "TextCNN")
+      elif args.model_type == "fnn":
+        model = TextFNN(args, "TextFNN")
+      elif args.model_type == "rnn":
+        model = TextRNN(args, "TextRNN")      
+      sess.run(tf.global_variables_initializer())
+
+      model_dir = os.path.join(save_dir, col)
+      latest_ckpt = tf.train.latest_checkpoint(model_dir)
+      model.saver.restore(sess, latest_ckpt)
+
+      total_logits = []
+      for idx, batch in enumerate(test_batch):
+        comments, comments_length = batch
+        logits = model.get_logits(sess, 1.).tolist()
+        total_logits += logits
+    
+      preds[:,i] = np.array(total_logits)
+
+  print preds.shape
+  write_results(preds)
+
+def write_results(logits):
+  submission = pd.read_csv('data/sample_submission.csv')    
+  submid = pd.DataFrame({'id': submission["id"]})
+  submission = pd.concat([submid, pd.DataFrame(logits, columns=cols)], axis=1)
+  submission.to_csv('submission.csv', index=False)
 
 if __name__ == '__main__':
   args = config.get_args()
-  main(args)
+  # main(args)
+  test(args)
