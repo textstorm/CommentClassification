@@ -4,6 +4,7 @@ import pandas as pd
 import numpy as np
 import tensorflow as tf
 import tqdm
+import time
 
 from nltk.corpus import stopwords
 from collections import Counter
@@ -131,9 +132,7 @@ def load_model(model, ckpt, session, name):
   start_time = time.time()
   model.saver.restore(session, ckpt)
   session.run(tf.tables_initializer())
-  utils.print_out(
-      "loaded %s model parameters from %s, time %.2fs" %
-      (name, ckpt, time.time() - start_time))
+  print "loaded %s model parameters from %s, time %.2fs" % (name, ckpt, time.time() - start_time)
   return model
 
 def create_or_load_model(model, model_dir, session, name):
@@ -144,8 +143,7 @@ def create_or_load_model(model, model_dir, session, name):
     start_time = time.time()
     session.run(tf.global_variables_initializer())
     session.run(tf.tables_initializer())
-    utils.print_out("created %s model with fresh parameters, time %.2fs" %
-        (name, time.time() - start_time))
+    print "created %s model with fresh parameters, time %.2fs" % (name, time.time() - start_time)
 
   global_step = model.global_step.eval(session=session)
   return model, global_step
