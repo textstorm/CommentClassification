@@ -22,14 +22,14 @@ class Base(object):
     self.optimizer = tf.train.AdamOptimizer(self.learning_rate)
     self.global_step = tf.Variable(0, trainable=False)
 
-    self.embedding = self._build_embedding(self.vocab_size, self.embed_size, "encoder_embedding")
-    self.embed_inp = tf.nn.embedding_lookup(self.embedding, self.input_x)
-
-    # self.embedding = tf.Variable(tf.constant(0.0, shape=[self.vocab_size, self.embed_size]),
-    #                              trainable=True, name="embedding")
-    # self.embedding_placeholder = tf.placeholder(tf.float32, [self.vocab_size, self.embed_size])
-    # self.embedding_init = self.embedding.assign(self.embedding_placeholder)
+    # self.embedding = self._build_embedding(self.vocab_size, self.embed_size, "encoder_embedding")
     # self.embed_inp = tf.nn.embedding_lookup(self.embedding, self.input_x)
+
+    self.embedding = tf.Variable(tf.constant(0.0, shape=[self.vocab_size, self.embed_size]),
+                                 trainable=True, name="embedding")
+    self.embedding_placeholder = tf.placeholder(tf.float32, [self.vocab_size, self.embed_size])
+    self.embedding_init = self.embedding.assign(self.embedding_placeholder)
+    self.embed_inp = tf.nn.embedding_lookup(self.embedding, self.input_x)
 
   def _weight_variable(self, shape, name, initializer=None):
     initializer = tf.truncated_normal_initializer(stddev=0.1)
@@ -139,23 +139,19 @@ class TextCNN(Base):
     with tf.name_scope("output"):
       self.scores = tf.layers.dense(self.h_drop, self.nb_classes, name="scores")
       self.logits = tf.nn.sigmoid(self.scores)
-      self.predictions = tf.cond(self.logits > 0.5, 
-                                 lambda: tf.ones(self.logits.shape, dtype=tf.int32),
-                                 lambda: tf.zeros(self.logits.shape, dtype=tf.int32))
 
     with tf.name_scope("loss"):
-      losses = tf.nn.sigmoid_cross_entropy_with_logits(logits=self.scores, labels=self.input_y)
-      self.loss = tf.reduce_mean(losses)
-
-    with tf.name_scope("accuracy"):
-      correct_predictions = tf.equal(self.predictions, self.input_y, 1)
-      self.accuracy = tf.reduce_mean(tf.cast(correct_predictions, tf.float32), name="accuracy")
+      losses = self.roc_auc_score(y_pred=tf.nn.sigmoid(self.scores), y_true=self.input_y)
+      self.loss = losses
+      # losses = tf.nn.sigmoid_cross_entropy_with_logits(logits=self.scores, labels=self.input_y)
+      # self.loss = tf.reduce_mean(losses)
 
     with tf.name_scope('train'):
       grads_and_vars = self.optimizer.compute_gradients(self.loss)
       grads_and_vars = [(tf.clip_by_norm(g, self.max_grad_norm), v) for g, v in grads_and_vars]
       self.train_op = self.optimizer.apply_gradients(grads_and_vars, global_step=self.global_step)
 
+    self.tvars = tf.trainable_variables()
     self.saver = tf.train.Saver(tf.global_variables())
 
 class TextRNN(Base):
@@ -181,21 +177,24 @@ class TextRNN(Base):
       self.rnn_output = tf.layers.max_pooling1d(rnn_output, self.max_len, 1)
 
     with tf.name_scope("output"):
-      tmp = tf.reshape(self.rnn_output, [self.batch_size, self.hidden_size * 2])
+      # tmp = tf.reshape(self.rnn_output, [self.batch_size, self.hidden_size * 2])
       pre_score = tf.layers.dense(self.rnn_state, 32, activation=tf.nn.elu, name="pre_scores")
       self.scores = tf.layers.dense(pre_score, self.nb_classes, name="scores")
       self.scores = tf.reshape(self.scores, [-1])
       self.logits = tf.nn.sigmoid(self.scores)
 
     with tf.name_scope("loss"):
-      losses = tf.nn.sigmoid_cross_entropy_with_logits(logits=self.scores, labels=self.input_y)
-      self.loss = tf.reduce_mean(losses)
+      # losses = tf.nn.sigmoid_cross_entropy_with_logits(logits=self.scores, labels=self.input_y)
+      # self.loss = tf.reduce_mean(losses)
+      losses = self.roc_auc_score(y_pred=self.scores, y_true=self.input_y)
+      self.loss = losses
 
     with tf.name_scope('train'):
       grads_and_vars = self.optimizer.compute_gradients(self.loss)
       grads_and_vars = [(tf.clip_by_norm(g, self.max_grad_norm), v) for g, v in grads_and_vars]
       self.train_op = self.optimizer.apply_gradients(grads_and_vars, global_step=self.global_step)
 
+    self.tvars = tf.trainable_variables()
     self.saver = tf.train.Saver(tf.global_variables())
 
 class TextFNN(Base):
@@ -225,3 +224,76 @@ class TextFNN(Base):
       grads_and_vars = self.optimizer.compute_gradients(self.loss)
       grads_and_vars = [(tf.clip_by_norm(g, self.max_grad_norm), v) for g, v in grads_and_vars]
       self.train_op = self.optimizer.apply_gradients(grads_and_vars, global_step=self.global_step)
+
+class RNNWithAttention(Base):
+  def __init__(self, args, iterator, name=None):
+    super(RNNWithAttention, self).__init__(args=args, name=name)
+    self.hidden_size = args.hidden_size
+    self.rnn_layers = args.rnn_layers
+    self.attention_size = args.attention_size
+
+    with tf.variable_scope("rnn"):
+      num_layers = self.rnn_layers // 2
+      fw_cell = self.build_rnn_cell(self.hidden_size, num_layers, self.keep_prob)
+      bw_cell = self.build_rnn_cell(self.hidden_size, num_layers, self.keep_prob)
+      rnn_output, rnn_state = tf.nn.bidirectional_dynamic_rnn(cell_fw=fw_cell,
+                                                              cell_bw=bw_cell, 
+                                                              inputs=self.embed_inp,
+                                                              dtype=tf.float32,
+                                                              sequence_length=self.sequence_length)
+
+      rnn_output = tf.concat(rnn_output, -1)
+      self.attention_output, alphas = self.attention(rnn_output, self.attention_size, return_alphas=True)
+
+    with tf.name_scope("output"):
+      W = tf.Variable(tf.truncated_normal([self.hidden_size * 2, 1], stddev=0.1))
+      b = tf.Variable(tf.constant(0., shape=[1]))
+      self.scores = tf.nn.xw_plus_b(self.attention_output, W, b)
+      # self.scores = tf.layers.dense(self.attention_output, self.nb_classes, name="scores")
+      self.logits = tf.nn.sigmoid(self.scores)
+      print self.logits.get_shape().as_list()
+      self.predictions = tf.argmax(self.scores, 1, name="predictions")
+
+    with tf.name_scope("loss"):
+      losses = tf.nn.sigmoid_cross_entropy_with_logits(labels=self.iterator.labels, logits=self.scores)
+      self.loss = tf.reduce_mean(losses)
+
+    with tf.name_scope('train'):
+      grads_and_vars = self.optimizer.compute_gradients(self.loss)
+      grads_and_vars = [(tf.clip_by_norm(g, self.max_grad_norm), v) for g, v in grads_and_vars]
+      self.train_op = self.optimizer.apply_gradients(grads_and_vars, global_step=self.global_step)
+
+    self.tvars = tf.trainable_variables()
+    self.saver = tf.train.Saver(tf.global_variables())
+
+  def attention(self, inputs, size, return_alphas=False):
+    attention_context_vector = tf.get_variable(name='attention_context_vector', shape=[size], dtype=tf.float32)
+    input_projection = layers.fully_connected(inputs, size, activation_fn=tf.tanh)
+    vector_attn = tf.reduce_sum(tf.multiply(input_projection, attention_context_vector), axis=2, keep_dims=True)
+    attention_weights = tf.nn.softmax(vector_attn, dim=1)
+    weighted_projection = tf.multiply(inputs, attention_weights)
+    outputs = tf.reduce_sum(weighted_projection, axis=1)
+    if not return_alphas:
+      return outputs
+    else:
+      return outputs, attention_weights
+
+  def attention1(self, inputs, attention_size, return_alphas=False):
+    if isinstance(inputs, tuple):
+      inputs = tf.concat(inputs, 2)
+
+    hidden_size = inputs.shape[2].value
+    W_omega = tf.Variable(tf.random_normal([hidden_size, attention_size], stddev=0.1))
+    b_omega = tf.Variable(tf.random_normal([attention_size], stddev=0.1))
+    u_omega = tf.Variable(tf.random_normal([attention_size], stddev=0.1))
+
+    v = tf.tanh(tf.tensordot(inputs, W_omega, axes=1) + b_omega)
+
+    vu = tf.tensordot(v, u_omega, axes=1)   # (B,T) shape
+    alphas = tf.nn.softmax(vu)              # (B,T) shape also
+
+    output = tf.reduce_sum(inputs * tf.expand_dims(alphas, -1), 1)
+    if not return_alphas:
+      return output
+    else:
+      return output, alphas
