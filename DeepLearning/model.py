@@ -146,6 +146,7 @@ class TextCNN(Base):
       grads_and_vars = [(tf.clip_by_norm(g, self.max_grad_norm), v) for g, v in grads_and_vars]
       self.train_op = self.optimizer.apply_gradients(grads_and_vars, global_step=self.global_step)
 
+    self.tvars = tf.trainable_variables()
     self.saver = tf.train.Saver(tf.global_variables())
 
 class TextRNN(Base):
