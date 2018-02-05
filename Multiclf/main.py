@@ -168,7 +168,9 @@ def test(args):
         logits = loaded_model.get_logits(sess, comments, comments_length, 1.).tolist()
         total_logits += logits
     
-      preds[:,i] = np.array(total_logits)[0]
+      # print np.array(total_logits).shape
+      # print total_logits[:10]
+      preds[:,i] = np.array(total_logits[0])
 
   print preds.shape
   write_results(preds)
