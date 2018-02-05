@@ -3,6 +3,7 @@ import re
 import pandas as pd
 import numpy as np
 import tensorflow as tf
+import tqdm
 
 from nltk.corpus import stopwords
 from collections import Counter
@@ -43,7 +44,6 @@ def load_fasttext(pretrain_dir, vocab):
     if word_vector is not None:
       embedding[idx] = word_vector
   return embedding
-
 
 def vectorize(data, word_dict, verbose=True):
   reviews = []
@@ -108,7 +108,7 @@ def get_test_batches(sentences, batch_size, max_len=None, type="cnn"):
       seq_len = [max_len] * batch_size
     elif type == "rnn":
       seq, seq_len = padding_data_for_rnn(seq_batch)
-    all_batches.append((seq, seq_len, lab_batch))
+    all_batches.append((seq, seq_len))
   return all_batches
 
 def get_config_proto(log_device_placement=False, allow_soft_placement=True):
