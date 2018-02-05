@@ -1,11 +1,13 @@
 
 import pandas as pd
+import numpy as np
 import config
 import utils
 import time
 import os
 
 from sklearn.model_selection import train_test_split
+from sklearn import metrics
 from model import TextCNN, TextRNN, TextFNN
 import tensorflow as tf
 
@@ -54,8 +56,17 @@ def main(args):
       elif args.model_type == "fnn":
         model = TextFNN(args, "TextFNN")
       elif args.model_type == "rnn":
-        model = TextRNN(args, "TextRNN")      
+        model = TextRNN(args, "TextRNN")
+      elif args.model_type == "attention":
+        model = RNNWithAttention(args, "Attention")
+      else:
+        raise ValueError("Unknown model_type %s" % args.model_type)      
       sess.run(tf.global_variables_initializer())
+
+      embedding = utils.load_fasttext(pretrain_dir, index2word)
+      sess.run(model.embedding_init, {model.embedding_placeholder: embedding})
+      for line in model.tvars:
+        print line
 
       print "training %s model for %s" % (args.model_type, col)
       for epoch in range(1, args.nb_epochs + 1):
@@ -66,7 +77,7 @@ def main(args):
           test_batch = utils.get_batches(x_eval, y_eval, args.max_size_cnn, args.max_len)
         elif args.model_type in ["rnn"]:
           train_batch = utils.get_batches(x_train, y_train, args.batch_size, args.max_len, type="rnn")
-          test_batch = utils.get_batches(x_eval, y_eval, args.max_size_rnn, args.max_len, type="rnn")
+          test_batch = utils.get_batches(x_eval, y_eval, args.max_size_rnn, type="rnn")
 
         epoch_start_time = time.time()
         step_start_time = epoch_start_time
@@ -78,7 +89,7 @@ def main(args):
           loss += loss_t * batch_size
           total_comments += batch_size
 
-          if global_step % 200 == 0:
+          if global_step % 1000 == 0:
             print "epoch %d, step %d, loss %f, time %.2fs" % \
               (epoch, global_step, loss_t, time.time() - step_start_time)
             run_valid(test_batch, model, sess)
@@ -89,10 +100,10 @@ def main(args):
                 global_step=global_step)  
             step_start_time = time.time()
 
-          if global_step > 400:
+          if global_step > 15000:
             break
 
-        if global_step > 400:
+        if global_step > 15000:
           break
 
         epoch_time = time.time() - epoch_start_time
@@ -100,19 +111,20 @@ def main(args):
         print "train loss %f" % (loss / total_comments)
 
 def run_valid(test_data, model, sess):
-  loss, total_comments = 0., 0
+  total_logits = []
+  total_labels = []
   for batch in test_data:
     comments, comments_length, labels = batch
     loss_t, logits_t, batch_size = model.test(sess, comments, comments_length, labels, 1.0)
-    total_comments += batch_size
-    loss += loss_t * batch_size
-  print "loss %f in %d test comments" % (loss / total_comments, total_comments)  
+    total_logits += logits_t.tolist()
+    total_labels += labels
+  auc = metrics.roc_auc_score(np.array(total_labels), np.array(total_logits))
+  print "auc %f in valid comments" % auc  
 
 def test(args):
   save_dir = os.path.join(args.save_dir, args.model_type)
   test = pd.read_csv(args.test_dir)
   x_test = test["comment_text"]
-  print x_test.head()
   target_cols = ['toxic', 'severe_toxic', 'obscene', 'threat', 'insult', 'identity_hate']
 
   x = []
@@ -120,7 +132,6 @@ def test(args):
     if len(line) > 0:
       x.append(utils.review_to_wordlist(line.strip()))
   print "loaded %d comments from dataset" % len(x)
-  print x[1]
 
   index2word, word2index = utils.load_vocab(args.vocab_dir)
   print index2word[:10]
@@ -129,9 +140,9 @@ def test(args):
 
   target_cols = ['toxic', 'severe_toxic', 'obscene', 'threat', 'insult', 'identity_hate']
   if args.model_type in ["cnn", "fnn"]:
-    test_batch = utils.get_test_batches(x_train, y_train, args.max_size_cnn, args.max_len)
+    test_batch = utils.get_test_batches(x_vector, args.max_size_cnn, args.max_len)
   elif args.model_type in ["rnn"]:
-    test_batch = utils.get_test_batches(x_eval, y_eval, args.max_size_rnn, type="rnn")
+    test_batch = utils.get_test_batches(x_vector, args.max_size_rnn, type="rnn")
 
   preds = np.zeros((test.shape[0], len(target_cols)))
   for i, col in enumerate(target_cols):
@@ -154,7 +165,7 @@ def test(args):
       total_logits = []
       for idx, batch in enumerate(test_batch):
         comments, comments_length = batch
-        logits = model.get_logits(sess, 1.).tolist()
+        logits = model.get_logits(sess, comments, comments_length, 1.).tolist()
         total_logits += logits
     
       preds[:,i] = np.array(total_logits)
@@ -163,6 +174,7 @@ def test(args):
   write_results(preds)
 
 def write_results(logits):
+  cols = ['toxic', 'severe_toxic', 'obscene', 'threat', 'insult', 'identity_hate']
   submission = pd.read_csv('data/sample_submission.csv')    
   submid = pd.DataFrame({'id': submission["id"]})
   submission = pd.concat([submid, pd.DataFrame(logits, columns=cols)], axis=1)
@@ -170,5 +182,5 @@ def write_results(logits):
 
 if __name__ == '__main__':
   args = config.get_args()
-  # main(args)
+  main(args)
   test(args)
