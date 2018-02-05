@@ -170,9 +170,10 @@ def test(args):
     
       # print np.array(total_logits).shape
       # print total_logits[:10]
-      preds[:,i] = np.array(total_logits[0])
+      preds[:,i] = np.array(total_logits)[:,0]
 
   print preds.shape
+  print preds[:2]
   write_results(preds)
 
 def write_results(logits):
