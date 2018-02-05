@@ -160,15 +160,15 @@ def test(args):
 
       model_dir = os.path.join(save_dir, col)
       latest_ckpt = tf.train.latest_checkpoint(model_dir)
-      model.saver.restore(sess, latest_ckpt)
+      loaded_model = utils.load_model(model, latest_ckpt, sess, name="test")
 
       total_logits = []
       for idx, batch in enumerate(test_batch):
         comments, comments_length = batch
-        logits = model.get_logits(sess, comments, comments_length, 1.).tolist()
+        logits = loaded_model.get_logits(sess, comments, comments_length, 1.).tolist()
         total_logits += logits
     
-      preds[:,i] = np.array(total_logits)
+      preds[:,i] = np.array(total_logits)[0]
 
   print preds.shape
   write_results(preds)
@@ -182,5 +182,5 @@ def write_results(logits):
 
 if __name__ == '__main__':
   args = config.get_args()
-  main(args)
+  # main(args)
   test(args)
