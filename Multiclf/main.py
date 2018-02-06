@@ -100,10 +100,10 @@ def main(args):
                 global_step=global_step)  
             step_start_time = time.time()
 
-          if global_step > 15000:
+          if global_step > 30000:
             break
 
-        if global_step > 15000:
+        if global_step > 30000:
           break
 
         epoch_time = time.time() - epoch_start_time
@@ -168,12 +168,9 @@ def test(args):
         logits = loaded_model.get_logits(sess, comments, comments_length, 1.).tolist()
         total_logits += logits
     
-      # print np.array(total_logits).shape
-      # print total_logits[:10]
       preds[:,i] = np.array(total_logits)[:,0]
 
   print preds.shape
-  print preds[:2]
   write_results(preds)
 
 def write_results(logits):
@@ -185,5 +182,5 @@ def write_results(logits):
 
 if __name__ == '__main__':
   args = config.get_args()
-  # main(args)
+  main(args)
   test(args)
