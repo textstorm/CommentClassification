@@ -23,7 +23,7 @@ def get_args():
   parser.add_argument('--num_filters', type=int, default=100, help='num of filters')
   parser.add_argument('--keep_prob_cnn', type=float, default=0.5, help='keep prob in cnn')
   parser.add_argument('--max_size_cnn', type=int, default=1000, help='max numbers every batch of cnn')
-  parser.add_argument('--max_step_cnn', type=int, default=16000, help='max cnn train step')  
+  parser.add_argument('--max_step_cnn', type=int, default=30100, help='max cnn train step')  
   #rnn
   parser.add_argument('--cell_type', type=str, default="gru", help='lstm or gru')
   parser.add_argument('--hidden_size', type=int, default=64, help='rnn hidden size')
