@@ -72,9 +72,9 @@ def main(args):
   print "Model type is %s" % (args.model_type)
   print "Epoch %d start " % (epoch)
   print "- " * 50
-  vocab = utils.load_data(args.vocab_dir)
-  embedding = utils.load_fasttext(pretrain_dir, vocab)
-  train_sess.run(loaded_train_model.embedding_init, {loaded_train_model.embedding_placeholder: embedding})
+  # vocab = utils.load_data(args.vocab_dir)
+  # embedding = utils.load_fasttext(pretrain_dir, vocab)
+  # train_sess.run(loaded_train_model.embedding_init, {loaded_train_model.embedding_placeholder: embedding})
   for line in loaded_train_model.tvars:
     print line
 
