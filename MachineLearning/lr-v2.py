@@ -43,6 +43,6 @@ if __name__ == '__main__':
 
   subm = pd.read_csv('../data/sample_submission.csv')    
   submid = pd.DataFrame({'id': subm["id"]})
-  submission = pd.concat([submid, pd.DataFrame(preds, columns = cols)], axis=1)
+  submission = pd.concat([submid, pd.DataFrame(preds, columns=cols)], axis=1)
   submission.to_csv('submission-lr.csv', index=False)
  
