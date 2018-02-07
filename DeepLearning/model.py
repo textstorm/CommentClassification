@@ -211,7 +211,7 @@ class RNNWithAttention(Base):
 
       rnn_output = tf.concat(rnn_output, -1)
       print rnn_output.get_shape().as_list()
-      self.attention_output, alphas = self.attention(rnn_output, self.attention_size, return_alphas=True)
+      self.attention_output, alphas = self.attention(rnn_output, self.attention_size)
 
     with tf.name_scope("output"):
       W = tf.Variable(tf.truncated_normal([self.hidden_size * 2, 1], stddev=0.1))
@@ -234,19 +234,18 @@ class RNNWithAttention(Base):
     self.tvars = tf.trainable_variables()
     self.saver = tf.train.Saver(tf.global_variables())
 
-  def attention(self, inputs, size, return_alphas=False):
+  def attention_v2(self, inputs, size):
+     
+  def attention_v1(self, inputs, size):
     attention_context_vector = tf.get_variable(name='attention_context_vector', shape=[size], dtype=tf.float32)
     input_projection = layers.fully_connected(inputs, size, activation_fn=tf.tanh)
     vector_attn = tf.reduce_sum(tf.multiply(input_projection, attention_context_vector), axis=2, keep_dims=True)
     attention_weights = tf.nn.softmax(vector_attn, dim=1)
     weighted_projection = tf.multiply(inputs, attention_weights)
     outputs = tf.reduce_sum(weighted_projection, axis=1)
-    if not return_alphas:
-      return outputs
-    else:
-      return outputs, attention_weights
+    return outputs, attention_weights
 
-  def attention1(self, inputs, attention_size, return_alphas=False):
+  def attention1(self, inputs, attention_size):
     if isinstance(inputs, tuple):
       inputs = tf.concat(inputs, 2)
 
@@ -261,7 +260,4 @@ class RNNWithAttention(Base):
     alphas = tf.nn.softmax(vu)              # (B,T) shape also
 
     output = tf.reduce_sum(inputs * tf.expand_dims(alphas, -1), 1)
-    if not return_alphas:
-      return output
-    else:
-      return output, alphas
+    return output, alphas
