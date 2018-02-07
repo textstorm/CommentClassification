@@ -32,30 +32,20 @@ if __name__ == '__main__':
   for i, col in enumerate(cols):
     print 'training svm model for {}...'.format(col)
     t0 = time.time()
-    model = SVC(probability=True, random_state=42)
+    model = SVC(C=0.1, gamma=0.01, probability=True, random_state=42)
+    model.fit(comments_train, labels_train[col])
 
-    params = {
-      'C': [0.1, 1],
-      'kernel': ['linear', 'rbf'],
-      'gamma': [0.01, 0.1]}
-    clfs = GridSearchCV(model, params, scoring='neg_log_loss', cv=5, verbose=5)
-    clfs.fit(comments_train, labels_train[col])
+    print "evaluating..."
+    y_pred = model.predict_proba(comments_valid)[:, 1]
+    auc = roc_auc_score(labels_valid[col], y_pred)
+    logloss = log_loss(labels_valid[col], y_pred)
+    print 'auc: {}, logloss: {}'.format(auc, logloss)
 
-    print 'best model and score:'
-    best = clfs.best_estimator_
-    best_score = clfs.best_score_
+    print "%.2f secs ==> [%d/6]LogisticRegression().fit()" % (time.time() - t0, i + 1)
+    preds[:, i] = model.predict_proba(comments_test)[:, 1]
+    gc.collect()
 
-    # print "evaluating..."
-    # y_pred = model.predict_proba(comments_valid)[:, 1]
-    # auc = roc_auc_score(labels_valid[col], y_pred)
-    # logloss = log_loss(labels_valid[col], y_pred)
-    # print 'auc: {}, logloss: {}'.format(auc, logloss)
-
-    # print "%.2f secs ==> [%d/6]LogisticRegression().fit()" % (time.time() - t0, i + 1)
-    # preds[:, i] = model.predict_proba(comments_test)[:, 1]
-    # gc.collect()
-
-  # subm = pd.read_csv('../data/sample_submission.csv')    
-  # submid = pd.DataFrame({'id': subm["id"]})
-  # submission = pd.concat([submid, pd.DataFrame(preds, columns = col)], axis=1)
-  # submission.to_csv('submission-lr.csv', index=False)
+  subm = pd.read_csv('../data/sample_submission.csv')    
+  submid = pd.DataFrame({'id': subm["id"]})
+  submission = pd.concat([submid, pd.DataFrame(preds, columns=cols)], axis=1)
+  submission.to_csv('submission-svm.csv', index=False)
