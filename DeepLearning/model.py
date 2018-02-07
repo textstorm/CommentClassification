@@ -21,11 +21,14 @@ class Base(object):
     self.optimizer = tf.train.AdamOptimizer(self.learning_rate)
     self.global_step = tf.Variable(0, trainable=False)
 
-    self.embedding = tf.Variable(tf.constant(0.0, shape=[self.vocab_size, self.embed_size]),
-                                 trainable=True, name="embedding")
-    self.embedding_placeholder = tf.placeholder(tf.float32, [self.vocab_size, self.embed_size])
-    self.embedding_init = self.embedding.assign(self.embedding_placeholder)
+    self.embedding = self._build_embedding(self.vocab_size, self.embed_size, "encoder_embedding")
     self.embed_inp = tf.nn.embedding_lookup(self.embedding, self.iterator.comments)
+
+    # self.embedding = tf.Variable(tf.constant(0.0, shape=[self.vocab_size, self.embed_size]),
+    #                              trainable=True, name="embedding")
+    # self.embedding_placeholder = tf.placeholder(tf.float32, [self.vocab_size, self.embed_size])
+    # self.embedding_init = self.embedding.assign(self.embedding_placeholder)
+    # self.embed_inp = tf.nn.embedding_lookup(self.embedding, self.iterator.comments)
 
   def _weight_variable(self, shape, name, initializer=None):
     initializer = tf.truncated_normal_initializer(stddev=0.1)
@@ -210,8 +213,8 @@ class RNNWithAttention(Base):
                                                               sequence_length=self.iterator.sentence_length)
 
       rnn_output = tf.concat(rnn_output, -1)
-      print rnn_output.get_shape().as_list()
-      self.attention_output, alphas = self.attention(rnn_output, self.attention_size)
+      # self.attention_output, alphas = self.attention(rnn_output, self.attention_size)
+      self.attention_output = self.attention_v2(rnn_output, self.attention_size)
 
     with tf.name_scope("output"):
       W = tf.Variable(tf.truncated_normal([self.hidden_size * 2, 1], stddev=0.1))
@@ -220,7 +223,6 @@ class RNNWithAttention(Base):
       # self.scores = tf.layers.dense(self.attention_output, self.nb_classes, name="scores")
       self.logits = tf.nn.sigmoid(self.scores)
       print self.logits.get_shape().as_list()
-      self.predictions = tf.argmax(self.scores, 1, name="predictions")
 
     with tf.name_scope("loss"):
       losses = tf.nn.sigmoid_cross_entropy_with_logits(labels=self.iterator.labels, logits=self.scores)
@@ -235,7 +237,23 @@ class RNNWithAttention(Base):
     self.saver = tf.train.Saver(tf.global_variables())
 
   def attention_v2(self, inputs, size):
-     
+    hidden_size = inputs.shape[2].value
+    inputs = layers.fully_connected(inputs, size, activation_fn=tf.nn.relu)
+    print "inputs shape ", inputs.get_shape().as_list()
+    W_omega = tf.Variable(tf.random_normal([self.batch_size, 1, size], stddev=0.1))
+    alpha = tf.nn.softmax(tf.reduce_sum(W_omega * inputs, 2))
+    print "alpha shape ", alpha.get_shape().as_list()
+    outputs = tf.reduce_sum(tf.expand_dims(self.alpha, -1) * doc_output, 1)
+    print "outputs shape ", outputs.get_shape()
+    return outputs
+
+
+                # w_bilinear = tf.get_variable(shape=[self._output_size, self._output_size],
+                #     initializer=tf.random_uniform_initializer(-0.01, 0.01), name='w_bilinear')
+                # tmp = tf.expand_dims(tf.matmul(que_output, w_bilinear), 1)
+                # self.alpha = tf.nn.softmax(tf.reduce_sum(tmp * doc_output, 2))
+                # self.bi_out = tf.reduce_sum(tf.expand_dims(self.alpha, -1) * doc_output, 1)
+
   def attention_v1(self, inputs, size):
     attention_context_vector = tf.get_variable(name='attention_context_vector', shape=[size], dtype=tf.float32)
     input_projection = layers.fully_connected(inputs, size, activation_fn=tf.tanh)
