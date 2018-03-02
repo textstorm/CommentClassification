@@ -6,7 +6,7 @@ import utils
 import time
 import os
 
-from sklearn.model_selection import StratifiedKFold
+from sklearn.model_selection import KFold
 from sklearn.metrics import roc_auc_score
 from model import TextCNN, TextRNN, TextFNN
 import tensorflow as tf
@@ -24,13 +24,11 @@ def main(args):
     if len(line) > 0:
       x.append(utils.review_to_wordlist(line.strip()))
   print "loaded %d comments from dataset" % len(x)
-  print x[1]
-  y = train[target_cols].tolist()
+  y = train[target_cols].values
 
   index2word, word2index = utils.load_vocab(args.vocab_dir)
-  print index2word[:10]
   x_vector = utils.vectorize(x, word2index, verbose=True)
-  print x_vector[1]
+  x_vector = np.array(x_vector)
 
   pretrain_dir = args.wordvec_dir
   save_dir = os.path.join(args.save_dir, args.model_type)
@@ -45,11 +43,12 @@ def main(args):
     os.makedirs(save_dir)
 
   nfolds = args.nfolds
-  skf = StratifiedKFold(n_splits=nfolds, random_state=123)
+  # skf = StratifiedKFold(n_splits=nfolds, random_state=123)
+  skf = KFold(n_splits=nfolds, shuffle=True, random_state=123)
 
   for (f, (train_index, test_index)) in enumerate(skf.split(x_vector, y)):
     x_train, x_eval = x_vector[train_index], x_vector[test_index]
-    y_train, y_eval = y[train_index], y[test_index]   
+    y_train, y_eval = y[train_index], y[test_index]
     with tf.Graph().as_default():
       config_proto = utils.get_config_proto()
       sess = tf.Session(config=config_proto)
@@ -91,7 +90,7 @@ def main(args):
           loss += loss_t * batch_size
           total_comments += batch_size
 
-          if global_step % 1000 == 0:
+          if global_step % 100 == 0:
             print "epoch %d, step %d, loss %f, time %.2fs" % \
               (epoch, global_step, loss_t, time.time() - step_start_time)
             run_valid(test_batch, model, sess)

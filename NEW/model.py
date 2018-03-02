@@ -12,7 +12,7 @@ class Base(object):
     self.cell_type = args.cell_type
 
     self.input_x = tf.placeholder(tf.int32, [None, None], name='input_x')
-    self.input_y = tf.placeholder(tf.float32, [None], name='input_y')
+    self.input_y = tf.placeholder(tf.float32, [None, None], name='input_y')
     self.sequence_length = tf.placeholder(tf.int32, [None], name="sequence_length")
     self.keep_prob = tf.placeholder(tf.float32, name="keep_prob")
     self.is_train = tf.placeholder(tf.bool, name="istrain")
@@ -26,7 +26,7 @@ class Base(object):
     # self.embed_inp = tf.nn.embedding_lookup(self.embedding, self.input_x)
 
     self.embedding = tf.Variable(tf.constant(0.0, shape=[self.vocab_size, self.embed_size]),
-                                 trainable=True, name="embedding")
+                                 trainable=False, name="embedding")
     self.embedding_placeholder = tf.placeholder(tf.float32, [self.vocab_size, self.embed_size])
     self.embedding_init = self.embedding.assign(self.embedding_placeholder)
     self.embed_inp = tf.nn.embedding_lookup(self.embedding, self.input_x)
@@ -141,10 +141,10 @@ class TextCNN(Base):
       self.logits = tf.nn.sigmoid(self.scores)
 
     with tf.name_scope("loss"):
-      losses = self.roc_auc_score(y_pred=tf.nn.sigmoid(self.scores), y_true=self.input_y)
-      self.loss = losses
-      # losses = tf.nn.sigmoid_cross_entropy_with_logits(logits=self.scores, labels=self.input_y)
-      # self.loss = tf.reduce_mean(losses)
+      # losses = self.roc_auc_score(y_pred=tf.nn.sigmoid(self.scores), y_true=self.input_y)
+      # self.loss = losses
+      losses = tf.nn.sigmoid_cross_entropy_with_logits(logits=self.scores, labels=self.input_y)
+      self.loss = tf.reduce_mean(losses)
 
     with tf.name_scope('train'):
       grads_and_vars = self.optimizer.compute_gradients(self.loss)
@@ -184,10 +184,10 @@ class TextRNN(Base):
       self.logits = tf.nn.sigmoid(self.scores)
 
     with tf.name_scope("loss"):
-      # losses = tf.nn.sigmoid_cross_entropy_with_logits(logits=self.scores, labels=self.input_y)
-      # self.loss = tf.reduce_mean(losses)
-      losses = self.roc_auc_score(y_pred=self.scores, y_true=self.input_y)
-      self.loss = losses
+      # losses = self.roc_auc_score(y_pred=self.scores, y_true=self.input_y)
+      # self.loss = losses
+      losses = tf.nn.sigmoid_cross_entropy_with_logits(logits=self.scores, labels=self.input_y)
+      self.loss = tf.reduce_mean(losses)
 
     with tf.name_scope('train'):
       grads_and_vars = self.optimizer.compute_gradients(self.loss)
