@@ -1,39 +1,33 @@
 
-import tensorflow as tf
+import re
+import pandas as pd
 import numpy as np
-import collections
+import tensorflow as tf
 import tqdm
-import sys
+import time
 
-def load_data(file_dir):
-  f = open(file_dir, 'r')
+from nltk.corpus import stopwords
+from collections import Counter
+
+def review_to_wordlist(review):
+  words = review.lower().split()
+  return words
+
+def review_to_sentences(review, tokenizer, remove_stopwords=False):
+  raw_sentences = tokenizer.tokenize(review.decode('utf8').strip())
   sentences = []
-  while True:
-    sentence = f.readline()
-    if not sentence:
-      break
-
-    sentence = sentence.strip().lower()
-    sentences.append(sentence)
-  f.close()
+  for raw_sentence in raw_sentences:
+    if len(raw_sentence) > 0:
+      sentences.append(review_to_wordlist(raw_sentence, remove_stopwords))
   return sentences
 
-def load_glove(pretrain_dir, vocab):
-  embedding_dict = {}
-  f = open(pretrain_dir,'r')
-  for row in f:
-    values = row.split()
-    word = values[0]
-    vector = np.asarray(values[1:], dtype='float32')
-    embedding_dict[word] = vector
-  f.close()
-  vocab_size = len(vocab)
-  embedding = np.zeros((vocab_size, 300))
-  for idx, word in enumerate(vocab):
-    word_vector = embedding_dict.get(word)
-    if word_vector is not None:
-      embedding[idx] = word_vector
-  return embedding
+def load_vocab(vocab_dir):
+  f = open(vocab_dir, 'r')
+  index2word = f.readlines()
+  index2word = map(lambda x: x.strip(), index2word)
+  word2index = dict([(word, idx) for idx, word in enumerate(index2word)])
+  print "%d words loadded from vocab file" % len(index2word)
+  return index2word, word2index
 
 def load_fasttext(pretrain_dir, vocab):
   embedding_dict = {}
@@ -52,84 +46,71 @@ def load_fasttext(pretrain_dir, vocab):
       embedding[idx] = word_vector
   return embedding
 
-class BatchedInput(collections.namedtuple("BatchedInput",
-                                          ("initializer",
-                                           "comments",
-                                           "labels",
-                                           "sentence_length"))):
-  pass
+def vectorize(data, word_dict, verbose=True):
+  reviews = []
+  for idx, line in enumerate(data):
+    seq_line = [word_dict[w] if w in word_dict else 0 for w in line]
+    reviews.append(seq_line)
 
-def pad_sequences(sequence, max_len):
-  seq_len = tf.size(sequence)
-  sequence = tf.cond(seq_len > max_len, 
-                     lambda: tf.slice(sequence, [seq_len - max_len], [max_len]),
-                     lambda: tf.pad(sequence, [[0, max_len - seq_len]]))
-  return sequence
+    if verbose and (idx % 10000 == 0):
+      print("Vectorization: processed {}".format(idx))
+  return reviews
 
-def deal_rnn_sequence(sequence, max_len=500):
-  seq_len = tf.size(sequence)
-  sequence = tf.cond(seq_len > max_len, 
-                     lambda: tf.slice(sequence, [seq_len - max_len], [max_len]),
-                     lambda: sequence)
-  return sequence
+def padding_data_for_rnn(sentences):
+  lengths = [len(s) for s in sentences]
+  n_samples = len(sentences)
+  max_len = np.max(lengths)
+  pdata = np.zeros((n_samples, max_len)).astype('int32')
+  for idx, seq in enumerate(sentences):
+    pdata[idx, :lengths[idx]] = seq
+  return pdata, lengths 
 
-def deal_very_long_test_data(sequence, max_len=1000):
-  seq_len = tf.size(sequence)
-  sequence = tf.cond(seq_len > max_len, 
-                     lambda: tf.slice(sequence, [seq_len - max_len], [max_len]),
-                     lambda: sequence)
-  return sequence
-
-def read_row(csv_row):
-  record_defaults = [[0], [""], [0], [0], [0], [0], [0], [0]]
-  row = tf.decode_csv(csv_row, record_defaults=record_defaults)
-  return row[1], row[2:]
-
-def get_iterator(dataset,
-                 vocab_table,
-                 batch_size,
-                 max_len,
-                 random_seed=123,
-                 shuffle=True,
-                 output_buffer_size=None):
-
-  if not output_buffer_size:
-    output_buffer_size = batch_size * 10000
-
-  unk_id = tf.cast(vocab_table.lookup(tf.constant("<unk>")), tf.int32)
-
+def get_batchidx(n_data, batch_size, shuffle=True):
+  """
+    batch all data index into a list
+  """
+  idx_list = np.arange(n_data)
   if shuffle:
-    dataset = dataset.shuffle(output_buffer_size, random_seed)
+    np.random.shuffle(idx_list)
+  batch_index = []
+  num_batches = int(np.ceil(float(n_data) / batch_size))
+  for idx in range(num_batches):
+    start_idx = idx * batch_size
+    batch_index.append(idx_list[start_idx: min(start_idx + batch_size, n_data)])
+  return batch_index
 
-  dataset = dataset.map(lambda line: read_row(line))
-  dataset = dataset.map(lambda x, y: (tf.string_split([x]).values, y))
-  dataset = dataset.map(lambda x, y: (tf.cast(vocab_table.lookup(x), tf.int32), y))
-  if max_len is not None: dataset = dataset.map(lambda x, y: (pad_sequences(x, max_len), y))
-  else: dataset = dataset.map(lambda x, y: (deal_rnn_sequence(x), y))
-  dataset = dataset.map(lambda x, y: (x, tf.cast(y, tf.float32), tf.size(x)))
+def get_batches(sentences, labels, batch_size, max_len=None, type="cnn"):
+  """
+    read all data into ram once
+  """
+  minibatches = get_batchidx(len(sentences), batch_size)
+  all_batches = []
+  for minibatch in minibatches:
+    seq_batch = [sentences[t] for t in minibatch]
+    lab_batch = [labels[t] for t in minibatch]
+    if type == "cnn":
+      seq = tf.keras.preprocessing.sequence.pad_sequences(seq_batch, max_len)
+      seq_len = [max_len] * batch_size
+    elif type == "rnn":
+      seq, seq_len = padding_data_for_rnn(seq_batch)
+    all_batches.append((seq, seq_len, lab_batch))
+  return all_batches
 
-  def batching_func(x):
-    return x.padded_batch(
-        batch_size,
-        padded_shapes=(
-            tf.TensorShape([None]),  #comments
-            tf.TensorShape([None]), #labels
-            tf.TensorShape([])), # length
-
-        padding_values=(
-            unk_id,
-            0.,
-            0))
-
-  batch_dataset = batching_func(dataset)
-  batch_iterator = batch_dataset.make_initializable_iterator()
-  (comments, labels, sentence_length) = (batch_iterator.get_next())
-
-  return BatchedInput(
-    initializer=batch_iterator.initializer,
-    comments=comments,
-    labels=labels,
-    sentence_length=sentence_length)
+def get_test_batches(sentences, batch_size, max_len=None, type="cnn"):
+  """
+    load test data
+  """
+  minibatches = get_batchidx(len(sentences), batch_size, shuffle=False)
+  all_batches = []
+  for minibatch in minibatches:
+    seq_batch = [sentences[t] for t in minibatch]
+    if type == "cnn":
+      seq = tf.keras.preprocessing.sequence.pad_sequences(seq_batch, max_len)
+      seq_len = [max_len] * batch_size
+    elif type == "rnn":
+      seq, seq_len = padding_data_for_rnn(seq_batch)
+    all_batches.append((seq, seq_len))
+  return all_batches
 
 def get_config_proto(log_device_placement=False, allow_soft_placement=True):
   config_proto = tf.ConfigProto(
@@ -138,63 +119,31 @@ def get_config_proto(log_device_placement=False, allow_soft_placement=True):
   config_proto.gpu_options.allow_growth = True
   return config_proto
 
-def read_test_row(csv_row):
-  record_defaults = [[0], [""], [""]]
-  row = tf.decode_csv(csv_row, record_defaults=record_defaults)
-  return row[2]
+def one_hot(labels, nb_classes=None):
+  labels = np.array(labels).astype("int32")
+  if not nb_classes:
+    nb_classes = np.max(labels) + 1
+  onehot_labels = np.zeros((len(labels), nb_classes)).astype("float32")
+  for i in range(len(labels)):
+    onehot_labels[i, labels[i]] = 1.
+  return onehot_labels
 
-def get_test_iterator(dataset,
-                      vocab_table,
-                      batch_size,
-                      max_len):
+def load_model(model, ckpt, session, name):
+  start_time = time.time()
+  model.saver.restore(session, ckpt)
+  session.run(tf.tables_initializer())
+  print "loaded %s model parameters from %s, time %.2fs" % (name, ckpt, time.time() - start_time)
+  return model
 
-  unk_id = tf.cast(vocab_table.lookup(tf.constant("<unk>")), tf.int32)
-  dataset = dataset.map(lambda line: read_test_row(line))
-  dataset = dataset.map(lambda line: tf.string_split([line]).values)
-  dataset = dataset.map(lambda line: tf.cast(vocab_table.lookup(line), tf.int32))
-  dataset = dataset.map(lambda line: deal_very_long_test_data(line))
-  if max_len is not None: dataset = dataset.map(lambda line: pad_sequences(line, max_len))
-  else: dataset = dataset.map(lambda line: deal_rnn_sequence(line))
-  dataset = dataset.map(lambda line: (line, tf.cast(line, tf.float32), tf.size(line)))
+def create_or_load_model(model, model_dir, session, name):
+  latest_ckpt = tf.train.latest_checkpoint(model_dir)
+  if latest_ckpt:
+    model = load_model(model, latest_ckpt, session, name)
+  else:
+    start_time = time.time()
+    session.run(tf.global_variables_initializer())
+    session.run(tf.tables_initializer())
+    print "created %s model with fresh parameters, time %.2fs" % (name, time.time() - start_time)
 
-  def batching_func(x):
-    return x.padded_batch(
-        batch_size,
-        padded_shapes=(
-            tf.TensorShape([None]),  #comments
-            tf.TensorShape([None]),  #labels but not use
-            tf.TensorShape([])), # length
-
-        padding_values=(
-            unk_id,
-            0.,
-            0))
-
-  batch_dataset = batching_func(dataset)
-  batch_iterator = batch_dataset.make_initializable_iterator()
-  (comments, labels, sentence_length) = (batch_iterator.get_next())
-
-  return BatchedInput(
-    initializer=batch_iterator.initializer,
-    comments=comments,
-    labels=labels,
-    sentence_length=sentence_length)
-
-def print_out(s, f=None, new_line=True):
-  if isinstance(s, bytes):
-    s = s.decode("utf-8")
-
-  if f:
-    f.write(s.encode("utf-8"))
-    if new_line:
-      f.write(b"\n")
-
-  # stdout
-  out_s = s.encode("utf-8")
-  if not isinstance(out_s, str):
-    out_s = out_s.decode("utf-8")
-  print out_s,
-
-  if new_line:
-    sys.stdout.write("\n")
-  sys.stdout.flush()
+  global_step = model.global_step.eval(session=session)
+  return model, global_step
