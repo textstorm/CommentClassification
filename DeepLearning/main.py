@@ -7,7 +7,7 @@ import helper
 import pandas as pd
 import numpy as np
 import tensorflow as tf
-from scipy.special import logit, expit
+from sklearn.model_selection import StratifiedKFold
 
 os.environ["CUDA_VISIBLE_DEVICES"] = "0"
 
@@ -51,6 +51,9 @@ def main(args):
   if not os.path.exists(save_dir):
     os.makedirs(save_dir)
 
+  nfolds = args.nfolds
+  skf = StratifiedKFold(n_splits=nfolds, random_state=123)
+  
   train_model = helper.build_train_model(args)
   valid_model = helper.build_eval_model(args)
 
@@ -72,9 +75,9 @@ def main(args):
   print "Model type is %s" % (args.model_type)
   print "Epoch %d start " % (epoch)
   print "- " * 50
-  # vocab = utils.load_data(args.vocab_dir)
-  # embedding = utils.load_fasttext(pretrain_dir, vocab)
-  # train_sess.run(loaded_train_model.embedding_init, {loaded_train_model.embedding_placeholder: embedding})
+  vocab = utils.load_data(args.vocab_dir)
+  embedding = utils.load_fasttext(pretrain_dir, vocab)
+  train_sess.run(loaded_train_model.embedding_init, {loaded_train_model.embedding_placeholder: embedding})
   for line in loaded_train_model.tvars:
     print line
 
@@ -90,7 +93,7 @@ def main(args):
           (epoch, global_step, loss_t, time.time() - step_start_time)   
         step_start_time = time.time()
 
-      if global_step % 1000 == 0:
+      if global_step % 100 == 0:
         loaded_train_model.saver.save(train_sess,
             os.path.join(save_dir, "model.ckpt"), global_step=global_step)   
         avg_loss, total_labels, total_logits = run_valid(args, valid_model, valid_sess, save_dir)
