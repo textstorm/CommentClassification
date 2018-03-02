@@ -21,14 +21,14 @@ class Base(object):
     self.optimizer = tf.train.AdamOptimizer(self.learning_rate)
     self.global_step = tf.Variable(0, trainable=False)
 
-    self.embedding = self._build_embedding(self.vocab_size, self.embed_size, "encoder_embedding")
-    self.embed_inp = tf.nn.embedding_lookup(self.embedding, self.iterator.comments)
-
-    # self.embedding = tf.Variable(tf.constant(0.0, shape=[self.vocab_size, self.embed_size]),
-    #                              trainable=True, name="embedding")
-    # self.embedding_placeholder = tf.placeholder(tf.float32, [self.vocab_size, self.embed_size])
-    # self.embedding_init = self.embedding.assign(self.embedding_placeholder)
+    # self.embedding = self._build_embedding(self.vocab_size, self.embed_size, "encoder_embedding")
     # self.embed_inp = tf.nn.embedding_lookup(self.embedding, self.iterator.comments)
+
+    self.embedding = tf.Variable(tf.constant(0.0, shape=[self.vocab_size, self.embed_size]),
+                                 trainable=False, name="embedding")
+    self.embedding_placeholder = tf.placeholder(tf.float32, [self.vocab_size, self.embed_size])
+    self.embedding_init = self.embedding.assign(self.embedding_placeholder)
+    self.embed_inp = tf.nn.embedding_lookup(self.embedding, self.iterator.comments)
 
   def _weight_variable(self, shape, name, initializer=None):
     initializer = tf.truncated_normal_initializer(stddev=0.1)
