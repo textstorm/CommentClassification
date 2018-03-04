@@ -36,7 +36,7 @@ def get_args():
   parser.add_argument('--batch_size', type=int, default=64, help='Example numbers every batch')
   parser.add_argument('--learning_rate', type=float, default=0.0001, help='initial learning rate')
   parser.add_argument('--max_grad_norm', type=float, default=5.0, help='max norm of gradient')
-  parser.add_argument('--nb_epochs', type=int, default=9, help='Number of epoch')
+  parser.add_argument('--nb_epochs', type=int, default=8, help='Number of epoch')
   parser.add_argument('--nfolds', type=int, default=5, help='cv') 
 
   return parser.parse_args()
