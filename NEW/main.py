@@ -116,16 +116,18 @@ def main(args):
 def run_valid(valid_data, model, sess):
   total_logits = []
   total_labels = []
+  loss = 0.0
   for batch in valid_data:
     comments, comments_length, labels = batch
     loss_t, logits_t, batch_size = model.test(sess, comments, comments_length, labels, 1.0)
     total_logits += logits_t.tolist()
     total_labels += labels
+    loss += loss_t * batch_size
   auc = roc_auc_score(np.array(total_labels), np.array(total_logits))
   auc_tf = tf.metrics.auc(labels=np.array(total_labels), predictions=np.array(total_logits))
   sess.run(tf.local_variables_initializer())
   auc_tf = sess.run(auc_tf)
-  print "auc %f in %d valid comments %f" % (auc, np.array(total_logits).shape[0], auc_tf[1])  
+  print "auc %f in %d valid comments %f %f" % (auc, np.array(total_logits).shape[0], auc_tf[1], loss)  
 
 def run_test(args, model, sess):
   save_dir = os.path.join(args.save_dir, args.model_type)
