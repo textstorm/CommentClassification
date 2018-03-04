@@ -26,7 +26,7 @@ class Base(object):
     # self.embed_inp = tf.nn.embedding_lookup(self.embedding, self.input_x)
 
     self.embedding = tf.Variable(tf.constant(0.0, shape=[self.vocab_size, self.embed_size]),
-                                 trainable=False, name="embedding")
+                                 trainable=True, name="embedding")
     self.embedding_placeholder = tf.placeholder(tf.float32, [self.vocab_size, self.embed_size])
     self.embedding_init = self.embedding.assign(self.embedding_placeholder)
     self.embed_inp = tf.nn.embedding_lookup(self.embedding, self.input_x)
