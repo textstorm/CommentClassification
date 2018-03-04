@@ -89,15 +89,12 @@ def main(args):
           loss += loss_t * batch_size
           total_comments += batch_size
 
-          if global_step % 100 == 0:
+          if global_step % 1000 == 0:
             print "epoch %d, step %d, loss %f, time %.2fs" % \
               (epoch, global_step, loss_t, time.time() - step_start_time)
             run_valid(valid_batch, model, sess)
             # model.saver.save(sess, os.path.join(save_dir, "model.ckpt"), global_step=global_step)  
             step_start_time = time.time()
-
-          if global_step > 8000:
-            break
         
         epoch_time = time.time() - epoch_start_time
         print "%.2f seconds in this epoch" % (epoch_time)
