@@ -17,11 +17,11 @@ def get_args():
   parser.add_argument('--model_type', type=str, default="cnn", help='cnn,rnn,attention')
   parser.add_argument('--nb_classes', type=int, default=6, help='class numbers')
   parser.add_argument('--max_len', type=int, default=200, help='The length of input x')
-  parser.add_argument('--vocab_size', type=int, default=100001, help='data vocab size')
+  parser.add_argument('--vocab_size', type=int, default=20001, help='data vocab size')
   parser.add_argument('--embed_size', type=int, default=300, help='dims of word embedding')
   #cnn
-  parser.add_argument('--filter_sizes', type=list, default=[3, 4, 5], help='')
-  parser.add_argument('--num_filters', type=int, default=100, help='num of filters')
+  parser.add_argument('--filter_sizes', type=list, default=[1, 2, 3, 4, 5], help='')
+  parser.add_argument('--num_filters', type=int, default=128, help='num of filters')
   parser.add_argument('--keep_prob_cnn', type=float, default=0.5, help='keep prob in cnn')
   parser.add_argument('--max_size_cnn', type=int, default=1000, help='max numbers every batch of cnn')
   parser.add_argument('--max_step_cnn', type=int, default=10000, help='max cnn train step')  
@@ -33,9 +33,10 @@ def get_args():
   parser.add_argument('--max_size_rnn', type=int, default=100, help='max numbers every batch of rnn')
   parser.add_argument('--max_step_rnn', type=int, default=16000, help='max rnn train step')
 
-  parser.add_argument('--batch_size', type=int, default=128, help='Example numbers every batch')
-  parser.add_argument('--learning_rate', type=float, default=0.001, help='initial learning rate')
+  parser.add_argument('--batch_size', type=int, default=64, help='Example numbers every batch')
+  parser.add_argument('--learning_rate', type=float, default=0.0001, help='initial learning rate')
   parser.add_argument('--max_grad_norm', type=float, default=5.0, help='max norm of gradient')
-  parser.add_argument('--nfolds', type=int, default=10, help='cv') 
+  parser.add_argument('--nb_epochs', type=int, default=9, help='Number of epoch')
+  parser.add_argument('--nfolds', type=int, default=5, help='cv') 
 
   return parser.parse_args()
