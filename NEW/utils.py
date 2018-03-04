@@ -46,7 +46,7 @@ def load_fasttext(pretrain_dir, vocab):
       embedding[idx] = word_vector
   return embedding
 
-def vectorize(data, word_dict, verbose=True):
+def vectorize(data, word_dict, verbose=False):
   reviews = []
   for idx, line in enumerate(data):
     seq_line = [word_dict[w] if w in word_dict else 0 for w in line]
