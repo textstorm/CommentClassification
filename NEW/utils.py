@@ -46,7 +46,7 @@ def load_fasttext(pretrain_dir, vocab):
       embedding[idx] = word_vector
   return embedding
 
-def vectorize(data, word_dict, verbose=False):
+def vectorize(data, word_dict, verbose=True):
   reviews = []
   for idx, line in enumerate(data):
     seq_line = [word_dict[w] if w in word_dict else 0 for w in line]
@@ -90,7 +90,7 @@ def get_batches(sentences, labels, batch_size, max_len=None, type="cnn"):
     lab_batch = [labels[t] for t in minibatch]
     if type == "cnn":
       seq = tf.keras.preprocessing.sequence.pad_sequences(seq_batch, max_len)
-      seq_len = [max_len] * batch_size
+      seq_len = [max_len] * seq.shape[0]
     elif type == "rnn":
       seq, seq_len = padding_data_for_rnn(seq_batch)
     all_batches.append((seq, seq_len, lab_batch))
@@ -106,7 +106,7 @@ def get_test_batches(sentences, batch_size, max_len=None, type="cnn"):
     seq_batch = [sentences[t] for t in minibatch]
     if type == "cnn":
       seq = tf.keras.preprocessing.sequence.pad_sequences(seq_batch, max_len)
-      seq_len = [max_len] * batch_size
+      seq_len = [max_len] * seq.shape[0]
     elif type == "rnn":
       seq, seq_len = padding_data_for_rnn(seq_batch)
     all_batches.append((seq, seq_len))
