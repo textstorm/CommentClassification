@@ -3,6 +3,7 @@ import re
 import pandas as pd
 import numpy as np
 import tensorflow as tf
+import collections
 import tqdm
 import time
 
@@ -63,6 +64,27 @@ def load_fasttext(pretrain_dir, vocab):
       embedding[idx] = word_vector
   return embedding
 
+def build_vocab(sentences, max_words=None):
+  word_count = collections.Counter()
+  for sentence in sentences:
+    for word in sentence.split():
+      word_count[word] += 1
+
+  print "the dataset has %d different words totally" % len(word_count)
+  if not max_words:
+    max_words = len(word_count)
+  filter_out_words = len(word_count) - max_words
+  word_dict = word_count.most_common(max_words)
+  index2word = ["<unk>"] + [word[0] for word in word_dict]
+  word2index = dict([(word, idx) for idx, word in enumerate(index2word)])
+
+  print "%d words filtered out of the vocabulary and %d words in the vocabulary" % \
+      (filter_out_words, len(index2word))
+  return index2word, word2index
+
+def build_vocab_char(sentences, max_char=None):
+  char_count = collections.Counter()
+  
 def vectorize(data, word_dict, verbose=True):
   reviews = []
   for idx, line in enumerate(data):
