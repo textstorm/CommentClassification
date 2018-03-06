@@ -30,6 +30,14 @@ def load_vocab(vocab_dir):
   print "%d words loadded from vocab file" % len(index2word)
   return index2word, word2index
 
+def load_char(char_dir):
+  f = open(char_dir, 'r')
+  index2char = f.readlines()
+  index2char = map(lambda x: x.strip(), index2char)
+  char2index = dict([(char, idx) for idx, char in enumerate(index2char)])
+  print "%d char loadded from vocab file" % len(index2char)
+  return index2char, char2index
+
 def load_glove(pretrain_dir, vocab):
   embedding_dict = {}
   f = open(pretrain_dir,'r')
@@ -84,11 +92,36 @@ def build_vocab(sentences, max_words=None):
 
 def build_vocab_char(sentences, max_char=None):
   char_count = collections.Counter()
-  
+  for sentence in sentences:
+    for ch in sentence:
+      char_count[ch] += 1
+
+  print "the dataset has %d different chars totally" % len(char_count)
+  if not max_char:
+    max_char = len(char_count)
+  filter_out_char = len(char_count) - max_char
+  char_dict = char_count.most_common(max_char)
+  index2char = ["<unk>"] + [ch[0] for ch in char_dict]
+  char2index = dict([(char, idx) for idx, char in enumerate(index2char)])
+
+  print "%d char filtered out of the vocabulary and %d char in the vocabulary" % \
+      (filter_out_char, len(index2char))
+  return index2char, char2index
+
 def vectorize(data, word_dict, verbose=True):
   reviews = []
   for idx, line in enumerate(data):
     seq_line = [word_dict[w] if w in word_dict else 0 for w in line]
+    reviews.append(seq_line)
+
+    if verbose and (idx % 10000 == 0):
+      print("Vectorization: processed {}".format(idx))
+  return reviews
+
+def vectorize_char(data, char_dict, verbose=True):
+  reviews = []
+  for idx, line in enumerate(data):
+    seq_line = [char_dict[w] if ch in char_dict else 0 for ch in line]
     reviews.append(seq_line)
 
     if verbose and (idx % 10000 == 0):
