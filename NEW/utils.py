@@ -29,6 +29,23 @@ def load_vocab(vocab_dir):
   print "%d words loadded from vocab file" % len(index2word)
   return index2word, word2index
 
+def load_glove(pretrain_dir, vocab):
+  embedding_dict = {}
+  f = open(pretrain_dir,'r')
+  for row in f:
+    values = row.split()
+    word = values[0]
+    vector = np.asarray(values[1:], dtype='float32')
+    embedding_dict[word] = vector
+  f.close()
+  vocab_size = len(vocab)
+  embedding = np.zeros((vocab_size, 300))
+  for idx, word in enumerate(vocab):
+    word_vector = embedding_dict.get(word)
+    if word_vector is not None:
+      embedding[idx] = word_vector
+  return embedding
+
 def load_fasttext(pretrain_dir, vocab):
   embedding_dict = {}
   f = open(pretrain_dir, 'r')
