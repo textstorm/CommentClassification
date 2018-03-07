@@ -11,7 +11,7 @@ from sklearn.metrics import roc_auc_score
 from model import TextCNN, TextRNN, TextFNN
 import tensorflow as tf
 
-os.environ["CUDA_VISIBLE_DEVICES"] = "1"
+os.environ["CUDA_VISIBLE_DEVICES"] = "0"
 
 def main(args):
   print "loadding data and labels from dataset"
@@ -27,8 +27,11 @@ def main(args):
   y = train[target_cols].values
 
   index2word, word2index = utils.load_vocab(args.vocab_dir)
+  index2char, char2index = utils.load_char(sentences)
   x_vector = utils.vectorize(x, word2index, verbose=False)
   x_vector = np.array(x_vector)
+  char_vector = utils.vectorize_char(x, char2index, verbose=False)
+  char_vector = np.array(x_vector)
 
   pretrain_dir = args.wordvec_dir
   save_dir = os.path.join(args.save_dir, args.model_type)
@@ -45,20 +48,21 @@ def main(args):
   nfolds = args.nfolds
   skf = KFold(n_splits=nfolds, shuffle=True, random_state=123)
   test_prob = []
-  for (f, (train_index, test_index)) in enumerate(skf.split(x_vector, y)):
+  for (f, (train_index, test_index)) in enumerate(skf.split(x_vector)):
     x_train, x_eval = x_vector[train_index], x_vector[test_index]
+    char_train, char_eval = char_vector[train_index], char_vector[test_index]
     y_train, y_eval = y[train_index], y[test_index]
     with tf.Graph().as_default():
       config_proto = utils.get_config_proto()
       sess = tf.Session(config=config_proto)
       if args.model_type == "cnn":
         model = TextCNN(args, "TextCNN")
-      elif args.model_type == "fnn":
-        model = TextFNN(args, "TextFNN")
       elif args.model_type == "rnn":
         model = TextRNN(args, "TextRNN")
       elif args.model_type == "attention":
         model = RNNWithAttention(args, "Attention")
+      elif args.model_type == "chrnn":
+        model = TextRNNChar(args, "TextRNNChar")
       else:
         raise ValueError("Unknown model_type %s" % args.model_type)      
       sess.run(tf.global_variables_initializer())
@@ -69,27 +73,37 @@ def main(args):
         print line
 
       print "training %s model for toxic comments classification" % (args.model_type)
+      print "%d fold start training" % f
       for epoch in range(1, args.nb_epochs + 1):
         print "epoch %d start" % epoch, "\n", "- " * 50
         loss, total_comments = 0., 0
-        if args.model_type in ["cnn", "fnn"]:
+        if args.model_type in ["cnn"]:
           train_batch = utils.get_batches(x_train, y_train, args.batch_size, args.max_len)
           valid_batch = utils.get_batches(x_eval, y_eval, args.max_size_cnn, args.max_len)
-        elif args.model_type in ["rnn"]:
-          train_batch = utils.get_batches(x_train, y_train, args.batch_size, args.max_len, type="rnn")
-          valid_batch = utils.get_batches(x_eval, y_eval, args.max_size_rnn, type="rnn")
+        elif args.model_type in ["rnn", "attention"]:
+          train_batch = utils.get_batches(x_train, y_train, args.batch_size, args.max_len)
+          valid_batch = utils.get_batches(x_eval, y_eval, args.max_size_rnn, args.max_len)
+        elif args.model_type in ["chrnn"]:
+          train_batch = utils.get_batches_with_char(x_train, char_train, y_train, args.batch_size, args.max_len)
+          valid_batch = utils.get_batches_with_char(x_eval, char_eval, y_eval, args.max_size_rnn, args.max_len)
 
         epoch_start_time = time.time()
         step_start_time = epoch_start_time
         for idx, batch in enumerate(train_batch):
-          comments, comments_length, labels = batch
-          _, loss_t, global_step, batch_size = model.train(sess, 
-                  comments, comments_length, labels, keep_prob)
+          if args.model_type in ["cnn", "rnn", "attention"]
+            comments, comments_length, labels = batch
+            _, loss_t, global_step, batch_size = model.train(sess, 
+                    comments, comments_length, labels, keep_prob)
+
+          elif args,model_type in ["chrnn"]:
+            comments, comments_length, chs, labels = batch
+            _, loss_t, global_step, batch_size = model.train(sess, 
+                    comments, comments_length, chs, labels, keep_prob)
 
           loss += loss_t * batch_size
           total_comments += batch_size
 
-          if global_step % 1000 == 0:
+          if global_step % 200 == 0:
             print "epoch %d, step %d, loss %f, time %.2fs" % \
               (epoch, global_step, loss_t, time.time() - step_start_time)
             run_valid(valid_batch, model, sess)
@@ -101,7 +115,6 @@ def main(args):
         print "train loss %f" % (loss / total_comments)
 
       test_prob.append(run_test(args, model, sess))
-
   preds = np.zeros((test_prob[0].shape[0], len(target_cols)))
   for prob in test_prob:
     preds += prob
@@ -120,11 +133,10 @@ def run_valid(valid_data, model, sess):
     total_logits += logits_t.tolist()
     total_labels += labels
     loss += loss_t * batch_size
-  auc = roc_auc_score(np.array(total_labels), np.array(total_logits))
   auc_tf = tf.metrics.auc(labels=np.array(total_labels), predictions=np.array(total_logits))
   sess.run(tf.local_variables_initializer())
   auc_tf = sess.run(auc_tf)
-  print "auc %f in %d valid comments %f %f" % (auc, np.array(total_logits).shape[0], auc_tf[1], loss)  
+  print "auc %f in %d valid comments %f" % (auc_tf[1], np.array(total_logits).shape[0], loss / len(total_labels))  
 
 def run_test(args, model, sess):
   save_dir = os.path.join(args.save_dir, args.model_type)
@@ -144,7 +156,7 @@ def run_test(args, model, sess):
   if args.model_type in ["cnn", "fnn"]:
     test_batch = utils.get_test_batches(x_vector, args.max_size_cnn, args.max_len)
   elif args.model_type in ["rnn"]:
-    test_batch = utils.get_test_batches(x_vector, args.max_size_rnn, type="rnn")
+    test_batch = utils.get_test_batches(x_vector, args.max_size_rnn, args.max_len)
 
   total_logits = []
   for batch in test_batch:
