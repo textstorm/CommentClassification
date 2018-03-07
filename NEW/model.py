@@ -22,11 +22,11 @@ class Base(object):
     self.optimizer = tf.train.AdamOptimizer(self.learning_rate)
     self.global_step = tf.Variable(0, trainable=False)
 
-    # self.embedding = self._build_embedding(self.vocab_size, self.embed_size, "encoder_embedding")
-    # self.embed_inp = tf.nn.embedding_lookup(self.embedding, self.input_x)
+#     self.embedding = self._build_embedding(self.vocab_size, self.embed_size, "encoder_embedding")
+#     self.embed_inp = tf.nn.embedding_lookup(self.embedding, self.input_x)
 
     self.embedding = tf.Variable(tf.constant(0.0, shape=[self.vocab_size, self.embed_size]),
-                                 trainable=True, name="embedding")
+                                trainable=True, name="embedding")
     self.embedding_placeholder = tf.placeholder(tf.float32, [self.vocab_size, self.embed_size])
     self.embedding_init = self.embedding.assign(self.embedding_placeholder)
     self.embed_inp = tf.nn.embedding_lookup(self.embedding, self.input_x)
@@ -85,23 +85,6 @@ class Base(object):
     else:
       return tf.contrib.rnn.MultiRNNCell(cell_list)
 
-  def roc_auc_score(self, y_pred, y_true):
-    """ ROC AUC Score. tflearn
-    """
-    with tf.name_scope("RocAucScore"):
-      pos = tf.boolean_mask(y_pred, tf.cast(y_true, tf.bool))
-      neg = tf.boolean_mask(y_pred, ~tf.cast(y_true, tf.bool))
-
-      pos = tf.expand_dims(pos, 0)
-      neg = tf.expand_dims(neg, 1)
-
-      gamma = 0.2
-      p     = 3
-
-      difference = tf.zeros_like(pos * neg) + pos - neg - gamma
-      masked = tf.boolean_mask(difference, difference < 0.0)
-      return tf.reduce_sum(tf.pow(-masked, p))
-
 class TextCNN(Base):
   def __init__(self, args, name=None):
     self.filter_sizes = args.filter_sizes
@@ -141,8 +124,6 @@ class TextCNN(Base):
       self.logits = tf.nn.sigmoid(self.scores)
 
     with tf.name_scope("loss"):
-      # losses = self.roc_auc_score(y_pred=tf.nn.sigmoid(self.scores), y_true=self.input_y)
-      # self.loss = losses
       losses = tf.nn.sigmoid_cross_entropy_with_logits(logits=self.scores, labels=self.input_y)
       self.loss = tf.reduce_mean(losses)
 
@@ -165,9 +146,10 @@ class TextRNN(Base):
       num_layers = self.rnn_layers // 2
       fw_cell = self.build_rnn_cell(self.hidden_size, num_layers, self.keep_prob)
       bw_cell = self.build_rnn_cell(self.hidden_size, num_layers, self.keep_prob)
+      rnn_input = tf.layers.dropout(self.embed_inp, 0.7)
       rnn_output, rnn_state = tf.nn.bidirectional_dynamic_rnn(cell_fw=fw_cell, 
                                                               cell_bw=bw_cell, 
-                                                              inputs=self.embed_inp,
+                                                              inputs=rnn_input,
                                                               dtype=tf.float32,
                                                               sequence_length=self.sequence_length)
       if num_layers > 1:
@@ -177,15 +159,11 @@ class TextRNN(Base):
       self.rnn_output = tf.layers.max_pooling1d(rnn_output, self.max_len, 1)
 
     with tf.name_scope("output"):
-      # tmp = tf.reshape(self.rnn_output, [self.batch_size, self.hidden_size * 2])
       pre_score = tf.layers.dense(self.rnn_state, 32, activation=tf.nn.elu, name="pre_scores")
       self.scores = tf.layers.dense(pre_score, self.nb_classes, name="scores")
-      self.scores = tf.reshape(self.scores, [-1])
       self.logits = tf.nn.sigmoid(self.scores)
 
     with tf.name_scope("loss"):
-      # losses = self.roc_auc_score(y_pred=self.scores, y_true=self.input_y)
-      # self.loss = losses
       losses = tf.nn.sigmoid_cross_entropy_with_logits(logits=self.scores, labels=self.input_y)
       self.loss = tf.reduce_mean(losses)
 
@@ -196,34 +174,6 @@ class TextRNN(Base):
 
     self.tvars = tf.trainable_variables()
     self.saver = tf.train.Saver(tf.global_variables())
-
-class TextFNN(Base):
-  def __init__(self, args, name=None):
-    super(TextFNN, self).__init__(args=args, name=name)
-    self.hidden_size = args.hidden_size
-
-    with tf.variable_scope("fnn"):
-      embed_inp = tf.reshape(self.embed_inp, [-1, 20000])
-      self.state = tf.layers.dense(embed_inp, self.hidden_size)
-
-    with tf.name_scope("output"):
-      self.scores = tf.layers.dense(self.state, self.nb_classes, name="scores")
-      self.predictions = tf.cond(self.logits > 0.5, 
-                                 lambda: tf.ones(self.logits),
-                                 lambda: tf.zeros(self.logits.shape, dtype=tf.int32))
-
-    with tf.name_scope("loss"):
-      losses = tf.nn.softmax_cross_entropy_with_logits(logits=self.scores, labels=self.input_y)
-      self.loss = tf.reduce_mean(losses)
-
-    with tf.name_scope("accuracy"):
-      correct_predictions = tf.equal(self.predictions, self.input_y)
-      self.accuracy = tf.reduce_mean(tf.cast(correct_predictions, tf.float32), name="accuracy")
-
-    with tf.name_scope('train'):
-      grads_and_vars = self.optimizer.compute_gradients(self.loss)
-      grads_and_vars = [(tf.clip_by_norm(g, self.max_grad_norm), v) for g, v in grads_and_vars]
-      self.train_op = self.optimizer.apply_gradients(grads_and_vars, global_step=self.global_step)
 
 class RNNWithAttention(Base):
   def __init__(self, args, iterator, name=None):
@@ -297,3 +247,64 @@ class RNNWithAttention(Base):
       return output
     else:
       return output, alphas
+
+class TextRNNChar(Base):
+  def __init__(self, args, name=None):
+    super(TextRNNChar, self).__init__(args=args, name=name)
+    self.hidden_size = args.hidden_size
+    self.model_type = args.model_type
+    self.rnn_layers = args.rnn_layers
+    self.char_embed_size = args.char_embed_size
+    self.char_vocab_size = args.char_vocab_size
+    self.char_filter_size = args.char_filter_size
+    self.char_num_filters = args.char_num_filters
+
+    self.char_x = tf.placeholder(tf.int32, [None, None, None], name='char_x')
+
+    self.embedding_char = tf.get_variable("embedding_char", [self.char_vocab_size, self.char_embed_size], 
+                                      dtype=tf.float32)
+    self.embed_inp_char = tf.nn.embedding_lookup(self.embedding_char, self.char_x, name="embedded_input_char")
+    print self.embed_inp_char.get_shape().as_list()
+
+    with tf.variable_scope("rnn_char"):
+      filter_shape = [1, self.char_filter_size, self.char_embed_size, 100]
+      weight = self._weight_variable(filter_shape, name=("char_weight_%d" % i))
+      bias = self._bias_variable(self.char_num_filters, name=("char_bias_%d" % i))
+      conv = tf.nn.conv2d(input=self.embed_inp_char,
+                          filter=weight,
+                          strides=[1, 1, 1, 1],
+                          padding="VALID",
+                          name="chconv")
+      char_feature = tf.reduce_max(tf.nn.relu(conv + bias), 2) 
+
+      num_layers = self.rnn_layers // 2
+      fw_cell = self.build_rnn_cell(self.hidden_size, num_layers, self.keep_prob)
+      bw_cell = self.build_rnn_cell(self.hidden_size, num_layers, self.keep_prob)
+      rnn_input = tf.layers.dropout(self.embed_inp, 0.7)
+      rnn_output, rnn_state = tf.nn.bidirectional_dynamic_rnn(cell_fw=fw_cell, 
+                                                              cell_bw=bw_cell, 
+                                                              inputs=rnn_input,
+                                                              dtype=tf.float32,
+                                                              sequence_length=self.sequence_length)
+      if num_layers > 1:
+        rnn_state = tuple(rnn_state[0][num_bi_layers - 1], rnn_state[1][num_bi_layers - 1])
+      self.rnn_state = tf.concat(rnn_state, -1)
+      rnn_output = tf.concat(rnn_output, -1)
+      self.rnn_output = tf.layers.max_pooling1d(rnn_output, self.max_len, 1)
+
+    with tf.name_scope("output"):
+      pre_score = tf.layers.dense(self.rnn_state, 32, activation=tf.nn.elu, name="pre_scores")
+      self.scores = tf.layers.dense(pre_score, self.nb_classes, name="scores")
+      self.logits = tf.nn.sigmoid(self.scores)
+
+    with tf.name_scope("loss"):
+      losses = tf.nn.sigmoid_cross_entropy_with_logits(logits=self.scores, labels=self.input_y)
+      self.loss = tf.reduce_mean(losses)
+
+    with tf.name_scope('train'):
+      grads_and_vars = self.optimizer.compute_gradients(self.loss)
+      grads_and_vars = [(tf.clip_by_norm(g, self.max_grad_norm), v) for g, v in grads_and_vars]
+      self.train_op = self.optimizer.apply_gradients(grads_and_vars, global_step=self.global_step)
+
+    self.tvars = tf.trainable_variables()
+    self.saver = tf.train.Saver(tf.global_variables())
