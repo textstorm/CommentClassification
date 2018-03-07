@@ -121,8 +121,10 @@ def vectorize(data, word_dict, verbose=True):
 def vectorize_char(data, char_dict, verbose=True):
   reviews = []
   for idx, line in enumerate(data):
-    seq_line = [char_dict[w] if ch in char_dict else 0 for ch in line]
-    reviews.append(seq_line)
+    char_line = []
+    for word in line:
+      char_line.append([char_dict[ch] if ch in word else 0 for w in line])
+    reviews.append(char_line)
 
     if verbose and (idx % 10000 == 0):
       print("Vectorization: processed {}".format(idx))
@@ -151,7 +153,7 @@ def get_batchidx(n_data, batch_size, shuffle=True):
     batch_index.append(idx_list[start_idx: min(start_idx + batch_size, n_data)])
   return batch_index
 
-def get_batches(sentences, labels, batch_size, max_len=None, type="cnn"):
+def get_batches(sentences, labels, batch_size, max_len=None):
   """
     read all data into ram once
   """
@@ -160,12 +162,26 @@ def get_batches(sentences, labels, batch_size, max_len=None, type="cnn"):
   for minibatch in minibatches:
     seq_batch = [sentences[t] for t in minibatch]
     lab_batch = [labels[t] for t in minibatch]
-    if type == "cnn":
-      seq = tf.keras.preprocessing.sequence.pad_sequences(seq_batch, max_len)
-      seq_len = [max_len] * seq.shape[0]
-    elif type == "rnn":
-      seq, seq_len = padding_data_for_rnn(seq_batch)
+    seq = tf.keras.preprocessing.sequence.pad_sequences(seq_batch, max_len)
+    seq_len = [max_len] * seq.shape[0]
     all_batches.append((seq, seq_len, lab_batch))
+  return all_batches
+
+def get_batches_with_char(sentences, chars, labels, batch_size, max_len=None):
+  """
+    read all data into ram once
+  """
+  minibatches = get_batchidx(len(sentences), batch_size)
+  all_batches = []
+  for minibatch in minibatches:
+    seq_batch = [sentences[t] for t in minibatch]
+    char_batch = [chars[t] for t in minibatch]
+    lab_batch = [labels[t] for t in minibatch]
+    seq = tf.keras.preprocessing.sequence.pad_sequences(seq_batch, max_len)
+    ch = map(lambda x: tf.keras.preprocessing.pad_sequences(x, 10), char_batch)
+    ch = tf.keras.preprocessing.pad_sequences(ch, max_len)
+    seq_len = [max_len] * seq.shape[0]
+    all_batches.append((seq, seq_len, ch, lab_batch))
   return all_batches
 
 def get_test_batches(sentences, batch_size, max_len=None, type="cnn"):
