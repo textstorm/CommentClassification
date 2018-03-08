@@ -25,7 +25,7 @@ class Base(object):
     # self.embed_inp = tf.nn.embedding_lookup(self.embedding, self.iterator.comments)
 
     self.embedding = tf.Variable(tf.constant(0.0, shape=[self.vocab_size, self.embed_size]),
-                                 trainable=False, name="embedding")
+                                 trainable=True, name="embedding")
     self.embedding_placeholder = tf.placeholder(tf.float32, [self.vocab_size, self.embed_size])
     self.embedding_init = self.embedding.assign(self.embedding_placeholder)
     self.embed_inp = tf.nn.embedding_lookup(self.embedding, self.iterator.comments)
@@ -82,32 +82,14 @@ class Base(object):
     else:
       return tf.contrib.rnn.MultiRNNCell(cell_list)
 
-  def roc_auc_score(self, y_pred, y_true):
-    """ ROC AUC Score. tflearn
-    """
-    with tf.name_scope("RocAucScore"):
-      pos = tf.boolean_mask(y_pred, tf.cast(y_true, tf.bool))
-      neg = tf.boolean_mask(y_pred, ~tf.cast(y_true, tf.bool))
-
-      pos = tf.expand_dims(pos, 0)
-      neg = tf.expand_dims(neg, 1)
-
-      gamma = 0.2
-      p     = 3
-
-      difference = tf.zeros_like(pos * neg) + pos - neg - gamma
-      masked = tf.boolean_mask(difference, difference < 0.0)
-      return tf.reduce_sum(tf.pow(-masked, p))
-
 class TextCNN(Base):
   def __init__(self, args, iterator, name=None):
     self.filter_sizes = args.filter_sizes
     self.num_filters = args.num_filters
 
     super(TextCNN, self).__init__(args=args, iterator=iterator, name=name)
-
-    embed_exp = tf.expand_dims(self.embed_inp, -1)
-
+    embed_input = tf.layers.dropout(self.embed_inp, 0.5)
+    embed_exp = tf.expand_dims(embed_input, -1)
     pooling_output = []
     for i, filter_size in enumerate(self.filter_sizes):
       with tf.name_scope("conv-maxpool-%s" % filter_size):
@@ -138,7 +120,6 @@ class TextCNN(Base):
     with tf.name_scope("output"):
       self.scores = tf.layers.dense(self.h_drop, self.nb_classes, name="scores")
       self.logits = tf.nn.sigmoid(self.scores)
-      self.predictions = tf.argmax(self.scores, 1, name="predictions")
 
     with tf.name_scope("loss"):
       losses = tf.nn.sigmoid_cross_entropy_with_logits(labels=self.iterator.labels, logits=self.scores)
