@@ -21,7 +21,7 @@ def load_data(file_dir):
 def load_glove(pretrain_dir, vocab):
   embedding_dict = {}
   f = open(pretrain_dir,'r')
-  for row in f:
+  for row in tqdm.tqdm(f):
     values = row.split()
     word = values[0]
     vector = np.asarray(values[1:], dtype='float32')
@@ -66,20 +66,6 @@ def pad_sequences(sequence, max_len):
                      lambda: tf.pad(sequence, [[0, max_len - seq_len]]))
   return sequence
 
-def deal_rnn_sequence(sequence, max_len=500):
-  seq_len = tf.size(sequence)
-  sequence = tf.cond(seq_len > max_len,
-                     lambda: tf.slice(sequence, [seq_len - max_len], [max_len]),
-                     lambda: sequence)
-  return sequence
-
-def deal_very_long_test_data(sequence, max_len=1000):
-  seq_len = tf.size(sequence)
-  sequence = tf.cond(seq_len > max_len, 
-                     lambda: tf.slice(sequence, [seq_len - max_len], [max_len]),
-                     lambda: sequence)
-  return sequence
-
 def read_row(csv_row):
   record_defaults = [[0], [""], [""], [0], [0], [0], [0], [0], [0]]
   row = tf.decode_csv(csv_row, record_defaults=record_defaults)
@@ -104,8 +90,7 @@ def get_iterator(dataset,
   dataset = dataset.map(lambda line: read_row(line))
   dataset = dataset.map(lambda x, y: (tf.string_split([x]).values, y))
   dataset = dataset.map(lambda x, y: (tf.cast(vocab_table.lookup(x), tf.int32), y))
-  if max_len is not None: dataset = dataset.map(lambda x, y: (pad_sequences(x, max_len), y))
-  else: dataset = dataset.map(lambda x, y: (deal_rnn_sequence(x), y))
+  dataset = dataset.map(lambda x, y: (pad_sequences(x, max_len), y))
   dataset = dataset.map(lambda x, y: (x, tf.cast(y, tf.float32), tf.size(x)))
 
   def batching_func(x):
@@ -152,9 +137,7 @@ def get_test_iterator(dataset,
   dataset = dataset.map(lambda line: read_test_row(line))
   dataset = dataset.map(lambda line: tf.string_split([line]).values)
   dataset = dataset.map(lambda line: tf.cast(vocab_table.lookup(line), tf.int32))
-  dataset = dataset.map(lambda line: deal_very_long_test_data(line))
-  if max_len is not None: dataset = dataset.map(lambda line: pad_sequences(line, max_len))
-  else: dataset = dataset.map(lambda line: deal_rnn_sequence(line))
+  dataset = dataset.map(lambda line: pad_sequences(line, max_len))
   dataset = dataset.map(lambda line: (line, tf.cast(line, tf.float32), tf.size(line)))
 
   def batching_func(x):
