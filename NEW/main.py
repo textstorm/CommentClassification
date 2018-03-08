@@ -8,37 +8,45 @@ import os
 
 from sklearn.model_selection import KFold
 from sklearn.metrics import roc_auc_score
-from model import TextCNN, TextRNN, TextFNN
+from model import TextCNN, TextRNN, TextRNNChar
 import tensorflow as tf
 
-os.environ["CUDA_VISIBLE_DEVICES"] = "0"
+os.environ["CUDA_VISIBLE_DEVICES"] = "1"
 
 def main(args):
   print "loadding data and labels from dataset"
   train = pd.read_csv(args.train_dir)
+  ch_train = pd.read_csv(args.chtrain_dir)
   x_train = train["comment_text"]
+  x_chtrain = ch_train["comment_text"]
   target_cols = ['toxic', 'severe_toxic', 'obscene', 'threat', 'insult', 'identity_hate']
 
   x = []
+  x_ch = []
   for line in x_train:
     if len(line) > 0:
       x.append(utils.review_to_wordlist(line.strip()))
   print "loaded %d comments from dataset" % len(x)
+  for line in x_chtrain:
+    if len(line) > 0:
+      x_ch.append(utils.review_to_wordlist(line.strip()))
+  print "loaded %d comments from dataset" % len(x)
   y = train[target_cols].values
 
   index2word, word2index = utils.load_vocab(args.vocab_dir)
-  index2char, char2index = utils.load_char(sentences)
+  index2char, char2index = utils.load_char(args.char_dir)
   x_vector = utils.vectorize(x, word2index, verbose=False)
   x_vector = np.array(x_vector)
-  char_vector = utils.vectorize_char(x, char2index, verbose=False)
-  char_vector = np.array(x_vector)
+  char_vector = utils.vectorize_char(x_ch, char2index, verbose=False)
+  char_vector = np.array(char_vector)
+  print char_vector[0]
 
   pretrain_dir = args.wordvec_dir
   save_dir = os.path.join(args.save_dir, args.model_type)
   if args.model_type == "cnn": 
     max_step = args.max_step_cnn
     keep_prob = args.keep_prob_cnn
-  elif args.model_type in ["rnn", "attention"]: 
+  elif args.model_type in ["rnn", "attention", "chrnn"]: 
     max_step = args.max_step_rnn
     keep_prob = args.keep_prob_rnn
 
@@ -67,8 +75,8 @@ def main(args):
         raise ValueError("Unknown model_type %s" % args.model_type)      
       sess.run(tf.global_variables_initializer())
 
-      embedding = utils.load_fasttext(pretrain_dir, index2word)
-      sess.run(model.embedding_init, {model.embedding_placeholder: embedding})
+      # embedding = utils.load_fasttext(pretrain_dir, index2word)
+      # sess.run(model.embedding_init, {model.embedding_placeholder: embedding})
       for line in model.tvars:
         print line
 
@@ -90,12 +98,12 @@ def main(args):
         epoch_start_time = time.time()
         step_start_time = epoch_start_time
         for idx, batch in enumerate(train_batch):
-          if args.model_type in ["cnn", "rnn", "attention"]
+          if args.model_type in ["cnn", "rnn", "attention"]:
             comments, comments_length, labels = batch
             _, loss_t, global_step, batch_size = model.train(sess, 
                     comments, comments_length, labels, keep_prob)
 
-          elif args,model_type in ["chrnn"]:
+          elif args.model_type in ["chrnn"]:
             comments, comments_length, chs, labels = batch
             _, loss_t, global_step, batch_size = model.train(sess, 
                     comments, comments_length, chs, labels, keep_prob)
@@ -103,7 +111,7 @@ def main(args):
           loss += loss_t * batch_size
           total_comments += batch_size
 
-          if global_step % 200 == 0:
+          if global_step % 100 == 0:
             print "epoch %d, step %d, loss %f, time %.2fs" % \
               (epoch, global_step, loss_t, time.time() - step_start_time)
             run_valid(valid_batch, model, sess)
@@ -128,8 +136,8 @@ def run_valid(valid_data, model, sess):
   total_labels = []
   loss = 0.0
   for batch in valid_data:
-    comments, comments_length, labels = batch
-    loss_t, logits_t, batch_size = model.test(sess, comments, comments_length, labels, 1.0)
+    comments, comments_length, chs, labels = batch
+    loss_t, logits_t, batch_size = model.test(sess, comments, comments_length, ch, labels, 1.0)
     total_logits += logits_t.tolist()
     total_labels += labels
     loss += loss_t * batch_size
@@ -141,17 +149,28 @@ def run_valid(valid_data, model, sess):
 def run_test(args, model, sess):
   save_dir = os.path.join(args.save_dir, args.model_type)
   test = pd.read_csv(args.test_dir)
+  ch_test = pd.read_csv(args.chtest_dir)
   x_test = test["comment_text"]
+  x_chtest = ch_test["comment_text"]
   target_cols = ['toxic', 'severe_toxic', 'obscene', 'threat', 'insult', 'identity_hate']
 
   x = []
+  x_ch = []
   for line in x_test:
     if len(line) > 0:
       x.append(utils.review_to_wordlist(line.strip()))
   print "loaded %d comments from test dataset" % len(x)
+  for line in x_chtest:
+    if len(line) > 0:
+      x_ch.append(utils.review_to_wordlist(line.strip()))
+  print "loaded %d comments from test dataset" % len(x)
 
   index2word, word2index = utils.load_vocab(args.vocab_dir)
+  index2char, char2index = utils.load_char(args.char_dir)
   x_vector = utils.vectorize(x, word2index, verbose=False)
+  x_vector = np.array(x_vector)
+  char_vector = utils.vectorize_char(x_ch, char2index, verbose=False)
+  char_vector = np.array(char_vector)
 
   if args.model_type in ["cnn", "fnn"]:
     test_batch = utils.get_test_batches(x_vector, args.max_size_cnn, args.max_len)
