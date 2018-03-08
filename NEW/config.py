@@ -8,13 +8,16 @@ def get_args():
   #data
   parser.add_argument('--train_dir', type=str, default='../data/pre/train.csv', help="train data")
   parser.add_argument('--test_dir', type=str, default='../data/pre/test.csv', help="test data")
+  parser.add_argument('--chtrain_dir', type=str, default='../data/pre/train_ch.csv', help="char train data")
+  parser.add_argument('--chtest_dir', type=str, default='../data/pre/test_ch.csv', help="char test data")
   parser.add_argument('--sub_dir', type=str, default='../data/pre/submission.csv', help="submission save")
   parser.add_argument('--vocab_dir', type=str, default='../data/pre/vocab.txt', help='vocab dir')
+  parser.add_argument('--char_dir', type=str, default='../data/pre/char.txt', help='char dir')
   parser.add_argument('--wordvec_dir', type=str, default='../data/glove/crawl-300d-2M.vec', help='fasttext dir')
   parser.add_argument('--save_dir', type=str, default='save/saves')
 
   # model
-  parser.add_argument('--model_type', type=str, default="rnn", help='cnn,rnn,attention')
+  parser.add_argument('--model_type', type=str, default="chrnn", help='cnn,rnn,attention,chrnn')
   parser.add_argument('--nb_classes', type=int, default=6, help='class numbers')
   parser.add_argument('--max_len', type=int, default=200, help='The length of input x')
   parser.add_argument('--vocab_size', type=int, default=100001, help='data vocab size')
@@ -23,7 +26,7 @@ def get_args():
   parser.add_argument('--char_embed_size', type=int, default=100, help='dims of char embedding')
 
   #cnn
-  parser.add_argument('--filter_sizes', type=list, default=[3, 4, 5], help='')
+  parser.add_argument('--filter_sizes', type=list, default=[1, 2, 3, 4, 5], help='')
   parser.add_argument('--char_filter_size', type=int, default=5, help='char filter size')
   parser.add_argument('--num_filters', type=int, default=256, help='num of filters')
   parser.add_argument('--char_num_filters', type=int, default=100, help='num of char filters')
