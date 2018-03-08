@@ -268,8 +268,8 @@ class TextRNNChar(Base):
 
     with tf.variable_scope("rnn_char"):
       filter_shape = [1, self.char_filter_size, self.char_embed_size, 100]
-      weight = self._weight_variable(filter_shape, name=("char_weight_%d" % i))
-      bias = self._bias_variable(self.char_num_filters, name=("char_bias_%d" % i))
+      weight = self._weight_variable(filter_shape, name=("char_weight"))
+      bias = self._bias_variable(self.char_num_filters, name=("char_bias"))
       conv = tf.nn.conv2d(input=self.embed_inp_char,
                           filter=weight,
                           strides=[1, 1, 1, 1],
@@ -281,6 +281,7 @@ class TextRNNChar(Base):
       fw_cell = self.build_rnn_cell(self.hidden_size, num_layers, self.keep_prob)
       bw_cell = self.build_rnn_cell(self.hidden_size, num_layers, self.keep_prob)
       rnn_input = tf.layers.dropout(self.embed_inp, 0.7)
+      rnn_input = tf.concat([rnn_input, char_feature], -1)
       rnn_output, rnn_state = tf.nn.bidirectional_dynamic_rnn(cell_fw=fw_cell, 
                                                               cell_bw=bw_cell, 
                                                               inputs=rnn_input,
@@ -308,3 +309,22 @@ class TextRNNChar(Base):
 
     self.tvars = tf.trainable_variables()
     self.saver = tf.train.Saver(tf.global_variables())
+
+  def train(self, sess, input_x, sequence_length, char_x, input_y, keep_prob):
+    return sess.run([self.train_op, 
+                     self.loss,
+                     self.global_step,
+                     self.batch_size], 
+                     feed_dict={self.input_x: input_x, self.input_y: input_y, self.keep_prob: keep_prob, 
+                                self.sequence_length: sequence_length, self.char_x: char_x, self.is_train: True})
+
+  def test(self, sess, input_x, sequence_length, char_x, input_y, keep_prob):
+    return sess.run([self.loss, 
+                     self.logits, 
+                     self.batch_size], 
+                     feed_dict={self.input_x: input_x, self.input_y: input_y, self.keep_prob: keep_prob, 
+                                self.sequence_length: sequence_length, self.char_x: char_x,self.is_train: True})
+
+  def get_logits(self, sess, input_x, sequence_length, char_x, keep_prob):
+    return sess.run(self.logits, feed_dict={self.input_x: input_x, self.char_x:char_x,
+        self.sequence_length: sequence_length, self.keep_prob: keep_prob})
