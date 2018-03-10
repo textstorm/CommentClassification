@@ -123,7 +123,7 @@ def vectorize_char(data, char_dict, verbose=True):
   for idx, line in enumerate(data):
     char_line = []
     for word in line:
-      char_line.append([char_dict[ch] if ch in word else 0 for w in line])
+      char_line.append([char_dict[ch] if ch in word else 0 for ch in word])
     reviews.append(char_line)
 
     if verbose and (idx % 10000 == 0):
@@ -178,8 +178,8 @@ def get_batches_with_char(sentences, chars, labels, batch_size, max_len=None):
     char_batch = [chars[t] for t in minibatch]
     lab_batch = [labels[t] for t in minibatch]
     seq = tf.keras.preprocessing.sequence.pad_sequences(seq_batch, max_len)
-    ch = map(lambda x: tf.keras.preprocessing.pad_sequences(x, 10), char_batch)
-    ch = tf.keras.preprocessing.pad_sequences(ch, max_len)
+    ch = map(lambda x: tf.keras.preprocessing.sequence.pad_sequences(x, 8), char_batch)
+    ch = tf.keras.preprocessing.sequence.pad_sequences(ch, max_len)
     seq_len = [max_len] * seq.shape[0]
     all_batches.append((seq, seq_len, ch, lab_batch))
   return all_batches
