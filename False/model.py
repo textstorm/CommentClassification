@@ -261,7 +261,7 @@ class TextRNN(Base):
 
 class TextRNNFE(Base):
   def __init__(self, args, name=None):
-    super(TextRNN, self).__init__(args=args, name=name)
+    super(TextRNNFE, self).__init__(args=args, name=name)
     self.hidden_size = args.hidden_size
     self.model_type = args.model_type
     self.rnn_layers = args.rnn_layers
