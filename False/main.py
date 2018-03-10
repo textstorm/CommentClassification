@@ -8,7 +8,7 @@ import os
 
 from sklearn.model_selection import KFold
 from scipy.sparse import hstack, csr_matrix
-from model import TextCNN, TextRNN, TextRNNChar
+from model import TextCNN, TextRNN, TextRNNChar, TextRNNFE, TextCNNFE
 import tensorflow as tf
 
 def add_features(file):
