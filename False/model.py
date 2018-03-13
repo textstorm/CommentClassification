@@ -10,18 +10,19 @@ class Base(object):
     self.embed_size = args.embed_size
     self.max_grad_norm = args.max_grad_norm
     self.cell_type = args.cell_type
+    self.dropout_eb = args.dropout_eb
 
     self.input_x = tf.placeholder(tf.int32, [None, None], name='input_x')
     self.input_y = tf.placeholder(tf.float32, [None, None], name='input_y')
     self.sequence_length = tf.placeholder(tf.int32, [None], name="sequence_length")
-    self.ex_features = tf.placeholder(tf.float32, [None, None], name="extra features")
+    self.ex_features = tf.placeholder(tf.float32, [None, 2], name="extra_features")
     self.is_train = tf.placeholder(tf.bool, name="is_train")
-    self.keep_prob = tf.cond(self.is_train,
-                             lambda: tf.constant(0.3),
-                             lambda: tf.constant(1.0))
-    self.keep_prob_eb = tf.cond(self.is_train,
-                                lambda: tf.constant(0.3),
-                                lambda: tf.constant(1.0))
+    self.dropout_cnn = tf.cond(self.is_train,
+                               lambda: tf.constant(args.dropout_cnn),
+                               lambda: tf.constant(1.0))
+    self.eb_dropout = tf.cond(self.is_train,
+                              lambda: tf.constant(self.dropout_eb),
+                              lambda: tf.constant(1.0))
 
     self.batch_size = tf.shape(self.input_y)[0]
     self.learning_rate = tf.Variable(float(args.learning_rate), 
@@ -100,8 +101,8 @@ class TextCNN(Base):
     self.num_filters = args.num_filters
 
     super(TextCNN, self).__init__(args=args, name=name)
-    embed_input = tf.layers.dropout(self.embed_inp, self.keep_prob_eb)
-    embed_exp = tf.expand_dims(self.embed_inp, -1)
+    embed_input = tf.layers.dropout(self.embed_inp, self.eb_dropout)
+    embed_exp = tf.expand_dims(embed_input, -1)
     pooling_output = []
     for i, filter_size in enumerate(self.filter_sizes):
       with tf.name_scope("conv-maxpool-%s" % filter_size):
@@ -127,7 +128,7 @@ class TextCNN(Base):
     self.h_pool_flat = tf.reshape(h_pool, [-1, num_filters_total])
 
     with tf.name_scope("dropout"):
-      self.h_drop = tf.nn.dropout(self.h_pool_flat, self.keep_prob)
+      self.h_drop = tf.nn.dropout(self.h_pool_flat, self.dropout_cnn)
 
     with tf.name_scope("output"):
       self.scores = tf.layers.dense(self.h_drop, self.nb_classes, name="scores")
@@ -151,8 +152,8 @@ class TextCNNFE(Base):
     self.num_filters = args.num_filters
 
     super(TextCNNFE, self).__init__(args=args, name=name)
-    embed_input = tf.layers.dropout(self.embed_inp, self.keep_prob_eb)
-    embed_exp = tf.expand_dims(self.embed_inp, -1)
+    embed_input = tf.layers.dropout(self.embed_inp, self.eb_dropout)
+    embed_exp = tf.expand_dims(embed_input, -1)
     pooling_output = []
     for i, filter_size in enumerate(self.filter_sizes):
       with tf.name_scope("conv-maxpool-%s" % filter_size):
@@ -178,7 +179,7 @@ class TextCNNFE(Base):
     self.h_pool_flat = tf.reshape(h_pool, [-1, num_filters_total])
 
     with tf.name_scope("dropout"):
-      self.h_drop = tf.nn.dropout(self.h_pool_flat, self.keep_prob)
+      self.h_drop = tf.nn.dropout(self.h_pool_flat, dropout_cnn)
 
     with tf.name_scope("output"):
       ex_features = tf.layers.dense(self.ex_features, 10, name="ex_fea_eb")
@@ -226,9 +227,9 @@ class TextRNN(Base):
 
     with tf.variable_scope("rnn"):
       num_layers = self.rnn_layers // 2
-      fw_cell = self.build_rnn_cell(self.hidden_size, num_layers, self.keep_prob)
-      bw_cell = self.build_rnn_cell(self.hidden_size, num_layers, self.keep_prob)
-      rnn_input = tf.layers.dropout(self.embed_inp, self.keep_prob_eb)
+      fw_cell = self.build_rnn_cell(self.hidden_size, num_layers, 1.0)
+      bw_cell = self.build_rnn_cell(self.hidden_size, num_layers, 1.0)
+      rnn_input = tf.layers.dropout(self.embed_inp, self.eb_dropout)
       rnn_output, rnn_state = tf.nn.bidirectional_dynamic_rnn(cell_fw=fw_cell, 
                                                               cell_bw=bw_cell, 
                                                               inputs=rnn_input,
@@ -268,9 +269,9 @@ class TextRNNFE(Base):
 
     with tf.variable_scope("rnn"):
       num_layers = self.rnn_layers // 2
-      fw_cell = self.build_rnn_cell(self.hidden_size, num_layers, self.keep_prob)
-      bw_cell = self.build_rnn_cell(self.hidden_size, num_layers, self.keep_prob)
-      rnn_input = tf.layers.dropout(self.embed_inp, self.keep_prob_eb)
+      fw_cell = self.build_rnn_cell(self.hidden_size, num_layers, 1.0)
+      bw_cell = self.build_rnn_cell(self.hidden_size, num_layers, 1.0)
+      rnn_input = tf.layers.dropout(self.embed_inp, self.eb_dropout)
       rnn_output, rnn_state = tf.nn.bidirectional_dynamic_rnn(cell_fw=fw_cell, 
                                                               cell_bw=bw_cell, 
                                                               inputs=rnn_input,
@@ -330,8 +331,8 @@ class RNNWithAttention(Base):
 
     with tf.variable_scope("rnn"):
       num_layers = self.rnn_layers // 2
-      fw_cell = self.build_rnn_cell(self.hidden_size, num_layers, self.keep_prob)
-      bw_cell = self.build_rnn_cell(self.hidden_size, num_layers, self.keep_prob)
+      fw_cell = self.build_rnn_cell(self.hidden_size, num_layers, 1.0)
+      bw_cell = self.build_rnn_cell(self.hidden_size, num_layers, 1.0)
       rnn_output, rnn_state = tf.nn.bidirectional_dynamic_rnn(cell_fw=fw_cell,
                                                               cell_bw=bw_cell, 
                                                               inputs=self.embed_inp,
@@ -420,13 +421,13 @@ class TextRNNChar(Base):
                           strides=[1, 1, 1, 1],
                           padding="VALID",
                           name="chconv")
-      char_feature = tf.reduce_max(tf.nn.relu(conv + bias), 2) 
+      char_feature = tf.reduce_max(tf.nn.relu(conv + bias), 2)
 
       num_layers = self.rnn_layers // 2
-      fw_cell = self.build_rnn_cell(self.hidden_size, num_layers, self.keep_prob)
-      bw_cell = self.build_rnn_cell(self.hidden_size, num_layers, self.keep_prob)
+      fw_cell = self.build_rnn_cell(self.hidden_size, num_layers, 1.0)
+      bw_cell = self.build_rnn_cell(self.hidden_size, num_layers, 1.0)
       rnn_input = tf.concat([self.embed_inp, char_feature], -1)
-      rnn_input = tf.layers.dropout(rnn_input, self.keep_prob_eb)
+      rnn_input = tf.layers.dropout(rnn_input, self.eb_dropout)
 
       rnn_output, rnn_state = tf.nn.bidirectional_dynamic_rnn(cell_fw=fw_cell, 
                                                               cell_bw=bw_cell, 
