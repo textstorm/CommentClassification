@@ -35,12 +35,10 @@ def main(args):
     if len(line) > 0:
       x.append(utils.review_to_wordlist(line.strip()))
   print "loaded %d comments from dataset" % len(x)
-  print x[0]
   for line in x_chtrain:
     if len(line) > 0:
       x_ch.append(utils.review_to_wordlist_char(line.strip()))
   print "loaded %d comments from dataset" % len(x)
-  print x_ch[0]
   y = train[target_cols].values
 
   index2word, word2index = utils.load_vocab(args.vocab_dir)
@@ -57,14 +55,14 @@ def main(args):
 
   if args.model_type in ["cnn", "cnnfe"]:
     max_step = args.max_step_cnn
-    keep_prob = args.keep_prob_cnn
     max_size = args.max_size_cnn
     nb_epochs = args.nb_epochs_cnn
   elif args.model_type in ["rnn", "attention", "chrnn", "rnnfe"]: 
     max_step = args.max_step_rnn
-    keep_prob = args.keep_prob_rnn
     max_size = args.max_size_rnn
     nb_epochs = args.nb_epochs_rnn
+    if args.model_type == "chrnn":
+      nb_epochs = 3
 
   ex_features = add_features("../data/train.csv")
   nfolds = args.nfolds
@@ -89,22 +87,19 @@ def main(args):
         model = RNNWithAttention(args, "Attention")
       elif args.model_type == "chrnn":
         model = TextRNNChar(args, "TextRNNChar")
-      elif args.model_type == "cnnfe":
-        model = TextCNNFE(args, "TextCNNFE")
       else:
         raise ValueError("Unknown model_type %s" % args.model_type)      
       sess.run(tf.global_variables_initializer())
 
-      # if args.use_ft: 
-      #   pretrain_dir = args.ft_dir
-      #   print "use FastText word vector"
-      #   embedding = utils.load_fasttext(pretrain_dir, index2word)
-      # if not args.use_ft:
-      #   pretrain_dir = args.ft_dir
-      #   print "use Glove word vector"
-      #   pretrain_dir = args.hlove_dir
-      #   embedding = utils.load_glove(pretrain_dir, index2word)
-      # sess.run(model.embedding_init, {model.embedding_placeholder: embedding})
+      if args.use_ft: 
+        pretrain_dir = args.ft_dir
+        print "use FastText word vector"
+        embedding = utils.load_fasttext(pretrain_dir, index2word)
+      if not args.use_ft:
+        pretrain_dir = args.glove_dir
+        print "use Glove word vector"
+        embedding = utils.load_glove(pretrain_dir, index2word)
+      sess.run(model.embedding_init, {model.embedding_placeholder: embedding})
 
       for line in model.tvars:
         print line
@@ -118,7 +113,7 @@ def main(args):
           train_batch = utils.get_batches(x_train, y_train, args.batch_size, args.max_len)
           valid_batch = utils.get_batches(x_eval, y_eval, max_size, args.max_len)
 
-        elif args.model_type in ["chrnn"]:
+        elif args.model_type in ["chrnn", "chcnn"]:
           train_batch = utils.get_batches_with_char(x_train, char_train, y_train, args.batch_size, args.max_len)
           valid_batch = utils.get_batches_with_char(x_eval, char_eval, y_eval, max_size, args.max_len)
 
@@ -144,7 +139,7 @@ def main(args):
           loss += loss_t * batch_size
           total_comments += batch_size
 
-          if global_step % 100 == 0:
+          if global_step % 200 == 0:
             print "epoch %d step %d loss %f time %.2fs"%(epoch,global_step,loss_t,time.time()-step_start_time)
 
           if global_step % 500 == 0:
@@ -223,7 +218,7 @@ def run_test(args, model, sess):
   elif args.model_type in ["chrnn"]:
     test_batch = utils.get_test_batches_with_char(x_vector, char_vector, args.max_size_rnn, args.max_len)
   elif args.model_type in ["rnnfe", "cnnfe"]:
-    test_batch = utils.get_batches_with_fe(x_vector, ex_features, max_size, args.max_len)
+    test_batch = utils.get_test_batches_with_fe(x_vector, ex_features, args.max_size_rnn, args.max_len)
 
   total_logits = []
   for batch in test_batch:
@@ -233,9 +228,9 @@ def run_test(args, model, sess):
     elif args.model_type in ["chrnn"]:
       comments, comments_length, chs = batch
       logits = model.get_logits(sess, comments, comments_length, chs).tolist()
-    elif model_type in ["rnnfe", "cnnfe"]:
+    elif args.model_type in ["rnnfe", "cnnfe"]:
       comments, comments_length, exs = batch
-      logits = model.get_logits(sess, comments, comments_length, exs)
+      logits = model.get_logits(sess, comments, comments_length, exs).tolist()
     total_logits += logits
   return np.array(total_logits)
 
