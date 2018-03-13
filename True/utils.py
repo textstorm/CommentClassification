@@ -39,7 +39,7 @@ def load_char(char_dir):
   print "%d char loadded from vocab file" % len(index2char)
   return index2char, char2index
 
-def load_glove(pretrain_dir, vocab):
+def load_glove(pretrain_dir, vocab, dims):
   embedding_dict = {}
   f = open(pretrain_dir,'r')
   for row in f:
@@ -49,7 +49,7 @@ def load_glove(pretrain_dir, vocab):
     embedding_dict[word] = vector
   f.close()
   vocab_size = len(vocab)
-  embedding = np.zeros((vocab_size, 300))
+  embedding = np.zeros((vocab_size, dims))
   for idx, word in enumerate(vocab):
     word_vector = embedding_dict.get(word)
     if word_vector is not None:
@@ -185,6 +185,21 @@ def get_batches_with_char(sentences, chars, labels, batch_size, max_len=None):
     all_batches.append((seq, seq_len, ch, lab_batch))
   return all_batches
 
+def get_batches_with_fe(sentences, labels, ex_features, batch_size, max_len=None):
+  """
+    read all data into ram once
+  """
+  minibatches = get_batchidx(len(sentences), batch_size)
+  all_batches = []
+  for minibatch in minibatches:
+    seq_batch = [sentences[t] for t in minibatch]
+    ex_batch = ex_features[minibatch]
+    lab_batch = [labels[t] for t in minibatch]
+    seq = tf.keras.preprocessing.sequence.pad_sequences(seq_batch, max_len)
+    seq_len = [max_len] * seq.shape[0]
+    all_batches.append((seq, seq_len, ex_batch, lab_batch))
+  return all_batches
+
 def get_test_batches(sentences, batch_size, max_len=None):
   """
     load test data
@@ -214,6 +229,20 @@ def get_test_batches_with_char(sentences, chars, batch_size, max_len=None):
     all_batches.append((seq, seq_len, ch))
   return all_batches
 
+def get_test_batches_with_fe(sentences, ex_features, batch_size, max_len=None):
+  """
+    read all data into ram once
+  """
+  minibatches = get_batchidx(len(sentences), batch_size, shuffle=False)
+  all_batches = []
+  for minibatch in minibatches:
+    seq_batch = [sentences[t] for t in minibatch]
+    ex_batch = ex_features[minibatch]
+    seq = tf.keras.preprocessing.sequence.pad_sequences(seq_batch, max_len)
+    seq_len = [max_len] * seq.shape[0]
+    all_batches.append((seq, seq_len, ex_batch))
+  return all_batches
+  
 def get_config_proto(log_device_placement=False, allow_soft_placement=True):
   config_proto = tf.ConfigProto(
       log_device_placement=log_device_placement,
