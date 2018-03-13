@@ -18,7 +18,7 @@ def get_args():
   parser.add_argument('--save_dir', type=str, default='save/saves')
 
   # model
-  parser.add_argument('--model_type', type=str, default="rnn", help='cnn,rnn,attention,chrnn,cnnfe,rnnfe')
+  parser.add_argument('--model_type', type=str, default="cnn", help='cnn,rnn,attention,chrnn,cnnfe,rnnfe')
   parser.add_argument('--nb_classes', type=int, default=6, help='class numbers')
   parser.add_argument('--max_len', type=int, default=200, help='The length of input x')
   parser.add_argument('--vocab_size', type=int, default=100002, help='data vocab size')
@@ -35,7 +35,7 @@ def get_args():
   parser.add_argument('--dropout_cnn', type=float, default=0.7, help='keep prob in cnn')
   parser.add_argument('--max_size_cnn', type=int, default=1000, help='max numbers every batch of cnn')
   parser.add_argument('--max_step_cnn', type=int, default=20000, help='max cnn train step') #tobe
-  parser.add_argument('--nb_epochs_cnn', type=int, default=6, help='Number of epoch')
+  parser.add_argument('--nb_epochs_cnn', type=int, default=3, help='Number of epoch')
   #rnn
   parser.add_argument('--cell_type', type=str, default="gru", help='lstm or gru')
   parser.add_argument('--hidden_size', type=int, default=512, help='rnn hidden size')
