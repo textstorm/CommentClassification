@@ -233,7 +233,7 @@ def get_test_batches_with_fe(sentences, ex_features, batch_size, max_len=None):
   """
     read all data into ram once
   """
-  minibatches = get_batchidx(len(sentences), batch_size)
+  minibatches = get_batchidx(len(sentences), batch_size, shuffle=False)
   all_batches = []
   for minibatch in minibatches:
     seq_batch = [sentences[t] for t in minibatch]
