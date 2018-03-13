@@ -27,7 +27,7 @@ def get_args():
   parser.add_argument('--embed_size', type=int, default=200, help='dims of word embedding')
   parser.add_argument('--char_vocab_size', type=int, default=206, help='data char vocab size')
   parser.add_argument('--char_embed_size', type=int, default=100, help='dims of char embedding')
-  parser.add_argument('--dropout_eb', type=float, default=0.5, help='dropout of embedding')
+  parser.add_argument('--dropout_eb', type=float, default=0.7, help='dropout of embedding')
 
   #cnn
   parser.add_argument('--filter_sizes', type=list, default=[1, 2, 3, 4, 5], help='')
@@ -38,6 +38,7 @@ def get_args():
   parser.add_argument('--max_size_cnn', type=int, default=1000, help='max numbers every batch of cnn')
   parser.add_argument('--max_step_cnn', type=int, default=20000, help='max cnn train step') #tobe
   parser.add_argument('--nb_epochs_cnn', type=int, default=3, help='Number of epoch')
+
   #rnn
   parser.add_argument('--cell_type', type=str, default="gru", help='lstm or gru')
   parser.add_argument('--hidden_size', type=int, default=512, help='rnn hidden size')
