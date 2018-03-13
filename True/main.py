@@ -8,7 +8,8 @@ import os
 
 from sklearn.model_selection import KFold
 from scipy.sparse import hstack, csr_matrix
-from model import TextCNN, TextRNN, TextRNNChar, TextCNNChar, TextRNNFE, TextCNNFE
+from model import TextCNN, TextRNN, TextRNNChar, TextCNNChar, TextRNNFE
+from model import TextCNNFE, TextRNNCharFE, TextRNNFE2
 import tensorflow as tf
 
 def add_features(file):
@@ -59,7 +60,7 @@ def main(args):
     max_step = args.max_step_cnn
     max_size = args.max_size_cnn
     nb_epochs = args.nb_epochs_cnn
-  elif args.model_type in ["rnn", "attention", "chrnn", "rnnfe"]: 
+  elif args.model_type in ["rnn", "rnnfe", "rnnfe2", "chrnn", "chrnnfe"]: 
     max_step = args.max_step_rnn
     max_size = args.max_size_rnn
     nb_epochs = args.nb_epochs_rnn
@@ -89,6 +90,10 @@ def main(args):
         model = TextRNNChar(args, "TextRNNChar")
       elif args.model_type == "chcnn":
         model = TextRNNChar(args, "TextCNNChar")
+      elif args.model_type == "rnnfe2":
+        model = TextRNNFE2(args, "TextCNNCharFE2")
+      elif args.model_type == "chrnnfe":
+        model = TextRNNCharFE(args, "TextCNNCharFE")
       else:
         raise ValueError("Unknown model_type %s" % args.model_type)      
       sess.run(tf.global_variables_initializer())
@@ -117,9 +122,9 @@ def main(args):
       print "training %s model for toxic comments classification" % (args.model_type)
       print "%d fold start training" % f
       for epoch in range(1, nb_epochs + 1):
-        print "epoch %d start" % epoch, "\n", "- " * 50
+        print "epoch %d start with lr %f" % (epoch, model.learning_rate.eval(session=sess)), "\n", "- " * 50
         loss, total_comments = 0.0, 0
-        if args.model_type in ["cnn", "rnn", "attention"]:
+        if args.model_type in ["cnn", "rnn"]:
           train_batch = utils.get_batches(x_train, y_train, args.batch_size, args.max_len)
           valid_batch = utils.get_batches(x_eval, y_eval, max_size, args.max_len)
 
@@ -127,29 +132,37 @@ def main(args):
           train_batch = utils.get_batches_with_char(x_train, char_train, y_train, args.batch_size, args.max_len)
           valid_batch = utils.get_batches_with_char(x_eval, char_eval, y_eval, max_size, args.max_len)
 
-        elif args.model_type in ["rnnfe", "cnnfe"]:
+        elif args.model_type in ["rnnfe", "cnnfe", "rnnfe2"]:
           train_batch = utils.get_batches_with_fe(x_train, y_train, ex_features, args.batch_size, args.max_len)
           valid_batch = utils.get_batches_with_fe(x_eval, y_eval, ex_features, max_size, args.max_len)
+
+        elif args.model_type in ["chrnnfe"]:
+          train_batch = utils.get_batches_with_charfe(x_train, char_train, y_train, ex_features, args.batch_size, args.max_len)
+          valid_batch = utils.get_batches_with_charfe(x_eval, char_eval, y_eval, ex_features, max_size, args.max_len)
 
         epoch_start_time = time.time()
         step_start_time = epoch_start_time
         for idx, batch in enumerate(train_batch):
-          if args.model_type in ["cnn", "rnn", "attention"]:
+          if args.model_type in ["cnn", "rnn"]:
             comments, comments_length, labels = batch
             _, loss_t, global_step, batch_size = model.train(sess, comments, comments_length, labels)
 
-          elif args.model_type in ["chrnn"]:
+          elif args.model_type in ["chrnn", "chcnn"]:
             comments, comments_length, chs, labels = batch
             _, loss_t, global_step, batch_size = model.train(sess, comments, comments_length, chs, labels)
 
-          elif args.model_type in ["rnnfe", "cnnfe"]:
+          elif args.model_type in ["rnnfe", "cnnfe", "rnnfe2"]:
             comments, comments_length, exs, labels = batch
             _, loss_t, global_step, batch_size = model.train(sess, comments, comments_length, labels, exs)
+
+          elif args.model_type in ["chrnnfe"]:
+            comments, comments_length, chs, exs, labels = batch
+            _, loss_t, global_step, batch_size = model.train(sess, comments, comments_length, chs, labels, exs)
 
           loss += loss_t * batch_size
           total_comments += batch_size
 
-          if global_step % 100 == 0:
+          if global_step % 300 == 0:
             print "epoch %d step %d loss %f time %.2fs"%(epoch,global_step,loss_t,time.time()-step_start_time)
 
           if global_step % 300 == 0:
@@ -175,17 +188,21 @@ def run_valid(valid_data, model, sess, model_type):
   total_labels = []
   loss = 0.0
   for batch in valid_data:
-    if model_type in ["cnn", "rnn", "attention"]:
+    if model_type in ["cnn", "rnn"]:
       comments, comments_length, labels = batch
       loss_t, logits_t, batch_size = model.test(sess, comments, comments_length, labels)
 
-    elif model_type in ["chrnn"]:
+    elif model_type in ["chrnn", "chcnn"]:
       comments, comments_length, chs, labels = batch
       loss_t, logits_t, batch_size = model.test(sess, comments, comments_length, chs, labels)
 
-    elif model_type in ["rnnfe", "cnnfe"]:
+    elif model_type in ["rnnfe", "cnnfe", "rnnfe2"]:
       comments, comments_length, exs, labels = batch
       loss_t, logits_t, batch_size = model.test(sess, comments, comments_length, labels, exs)
+
+    elif model_type in ["chrnnfe"]:
+      comments, comments_length, chs, exs, labels = batch
+      loss_t, logits_t, batch_size = model.test(sess, comments, comments_length, chs, labels, exs)
 
     total_logits += logits_t.tolist()
     total_labels += labels
@@ -232,15 +249,18 @@ def run_test(args, model, sess):
 
   total_logits = []
   for batch in test_batch:
-    if args.model_type in ["cnn", "rnn", "attention"]:
+    if args.model_type in ["cnn", "rnn"]:
       comments, comments_length = batch
       logits = model.get_logits(sess, comments, comments_length).tolist()
-    elif args.model_type in ["chrnn"]:
+    elif args.model_type in ["chrnn", "chcnn"]:
       comments, comments_length, chs = batch
       logits = model.get_logits(sess, comments, comments_length, chs).tolist()
-    elif args.model_type in ["rnnfe", "cnnfe"]:
+    elif args.model_type in ["rnnfe", "cnnfe", "rnnfe"]:
       comments, comments_length, exs = batch
       logits = model.get_logits(sess, comments, comments_length, exs).tolist()
+    elif args.model_type in ["chrnnfe"]:
+      comments, comments_length, chs, exs = batch
+      logits = model.get_logits(sess, comments, comments_length, chs, exs).tolist()
     total_logits += logits
   return np.array(total_logits)
 
@@ -255,6 +275,6 @@ def write_results(logits, model_type):
 if __name__ == '__main__':
   args = config.get_args()
   os.environ["CUDA_VISIBLE_DEVICES"] = "0"
-  if args.model_type in ["cnn", "chrnn"]:
+  if args.model_type in ["cnn", "chrnn", "chrnnfe"]:
     os.environ["CUDA_VISIBLE_DEVICES"] = "1"
   main(args)
