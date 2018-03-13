@@ -8,7 +8,7 @@ import os
 
 from sklearn.model_selection import KFold
 from scipy.sparse import hstack, csr_matrix
-from model import TextCNN, TextRNN, TextRNNChar
+from model import TextCNN, TextRNN, TextRNNChar, TextCNNChar, TextRNNFE, TextCNNFE
 import tensorflow as tf
 
 def add_features(file):
@@ -55,14 +55,12 @@ def main(args):
   if not os.path.exists(save_dir):
     os.makedirs(save_dir)
 
-  if args.model_type == "cnn":
+  if args.model_type in ["cnn", "cnnfe", "chcnn"]:
     max_step = args.max_step_cnn
-    keep_prob = args.keep_prob_cnn
     max_size = args.max_size_cnn
     nb_epochs = args.nb_epochs_cnn
-  elif args.model_type in ["rnn", "attention", "chrnn"]: 
+  elif args.model_type in ["rnn", "attention", "chrnn", "rnnfe"]: 
     max_step = args.max_step_rnn
-    keep_prob = args.keep_prob_rnn
     max_size = args.max_size_rnn
     nb_epochs = args.nb_epochs_rnn
 
@@ -79,25 +77,38 @@ def main(args):
       sess = tf.Session(config=config_proto)
       if args.model_type == "cnn":
         model = TextCNN(args, "TextCNN")
+      elif args.model_type == "cnnfe":
+        model = TextCNNFE(args, "TextCNNFE")
       elif args.model_type == "rnn":
         model = TextRNN(args, "TextRNN")
+      elif args.model_type == "rnnfe":
+        model = TextRNNFE(args, "TextRNNFE")
       elif args.model_type == "attention":
         model = RNNWithAttention(args, "Attention")
       elif args.model_type == "chrnn":
         model = TextRNNChar(args, "TextRNNChar")
+      elif args.model_type == "chcnn":
+        model = TextRNNChar(args, "TextCNNChar")
       else:
         raise ValueError("Unknown model_type %s" % args.model_type)      
       sess.run(tf.global_variables_initializer())
 
-      if args.use_ft: 
+      if args.use_wv == "ft": 
         pretrain_dir = args.ft_dir
         print "use FastText word vector"
         embedding = utils.load_fasttext(pretrain_dir, index2word)
-      if not args.use_ft:
-        pretrain_dir = args.ft_dir
-        print "use Glove word vector"
+      if args.use_wv == "glove1": 
+        pretrain_dir = args.glove_dir1
+        print "use Glove word vector 200 dims"
+        embedding = utils.load_glove(pretrain_dir, index2word, 200)
+      if args.use_wv == "glove2": 
         pretrain_dir = args.glove_dir2
-        embedding = utils.load_glove(pretrain_dir, index2word)
+        print "use Glove word vector 100 dims"
+        embedding = utils.load_glove(pretrain_dir, index2word, 100)
+      if args.use_wv == "glove3": 
+        pretrain_dir = args.glove_dir3
+        print "use Glove word vector 50 dims"
+        embedding = utils.load_glove(pretrain_dir, index2word, 50)
       sess.run(model.embedding_init, {model.embedding_placeholder: embedding})
 
       for line in model.tvars:
@@ -112,9 +123,13 @@ def main(args):
           train_batch = utils.get_batches(x_train, y_train, args.batch_size, args.max_len)
           valid_batch = utils.get_batches(x_eval, y_eval, max_size, args.max_len)
 
-        elif args.model_type in ["chrnn"]:
+        elif args.model_type in ["chrnn", "chcnn"]:
           train_batch = utils.get_batches_with_char(x_train, char_train, y_train, args.batch_size, args.max_len)
           valid_batch = utils.get_batches_with_char(x_eval, char_eval, y_eval, max_size, args.max_len)
+
+        elif args.model_type in ["rnnfe", "cnnfe"]:
+          train_batch = utils.get_batches_with_fe(x_train, y_train, ex_features, args.batch_size, args.max_len)
+          valid_batch = utils.get_batches_with_fe(x_eval, y_eval, ex_features, max_size, args.max_len)
 
         epoch_start_time = time.time()
         step_start_time = epoch_start_time
@@ -126,6 +141,10 @@ def main(args):
           elif args.model_type in ["chrnn"]:
             comments, comments_length, chs, labels = batch
             _, loss_t, global_step, batch_size = model.train(sess, comments, comments_length, chs, labels)
+
+          elif args.model_type in ["rnnfe", "cnnfe"]:
+            comments, comments_length, exs, labels = batch
+            _, loss_t, global_step, batch_size = model.train(sess, comments, comments_length, labels, exs)
 
           loss += loss_t * batch_size
           total_comments += batch_size
@@ -163,6 +182,10 @@ def run_valid(valid_data, model, sess, model_type):
     elif model_type in ["chrnn"]:
       comments, comments_length, chs, labels = batch
       loss_t, logits_t, batch_size = model.test(sess, comments, comments_length, chs, labels)
+
+    elif model_type in ["rnnfe", "cnnfe"]:
+      comments, comments_length, exs, labels = batch
+      loss_t, logits_t, batch_size = model.test(sess, comments, comments_length, labels, exs)
 
     total_logits += logits_t.tolist()
     total_labels += labels
@@ -204,16 +227,20 @@ def run_test(args, model, sess):
     test_batch = utils.get_test_batches(x_vector, args.max_size_rnn, args.max_len)
   elif args.model_type in ["chrnn"]:
     test_batch = utils.get_test_batches_with_char(x_vector, char_vector, args.max_size_rnn, args.max_len)
+  elif args.model_type in ["rnnfe", "cnnfe"]:
+    test_batch = utils.get_test_batches_with_fe(x_vector, ex_features, args.max_size_rnn, args.max_len)
 
   total_logits = []
   for batch in test_batch:
     if args.model_type in ["cnn", "rnn", "attention"]:
       comments, comments_length = batch
       logits = model.get_logits(sess, comments, comments_length).tolist()
-
     elif args.model_type in ["chrnn"]:
       comments, comments_length, chs = batch
       logits = model.get_logits(sess, comments, comments_length, chs).tolist()
+    elif args.model_type in ["rnnfe", "cnnfe"]:
+      comments, comments_length, exs = batch
+      logits = model.get_logits(sess, comments, comments_length, exs).tolist()
     total_logits += logits
   return np.array(total_logits)
 
