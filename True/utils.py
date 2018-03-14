@@ -200,6 +200,24 @@ def get_batches_with_fe(sentences, labels, ex_features, batch_size, max_len=None
     all_batches.append((seq, seq_len, ex_batch, lab_batch))
   return all_batches
 
+def get_batches_with_charfe(sentences, chars, labels, ex_features, batch_size, max_len=None):
+  """
+    read all data into ram once
+  """
+  minibatches = get_batchidx(len(sentences), batch_size)
+  all_batches = []
+  for minibatch in minibatches:
+    seq_batch = [sentences[t] for t in minibatch]
+    char_batch = [chars[t] for t in minibatch]
+    ex_batch = ex_features[minibatch]
+    lab_batch = [labels[t] for t in minibatch]
+    seq = tf.keras.preprocessing.sequence.pad_sequences(seq_batch, max_len)
+    ch = map(lambda x: tf.keras.preprocessing.sequence.pad_sequences(x, 8), char_batch)
+    ch = tf.keras.preprocessing.sequence.pad_sequences(ch, max_len)
+    seq_len = [max_len] * seq.shape[0]
+    all_batches.append((seq, seq_len, ch, ex_batch, lab_batch))
+  return all_batches
+
 def get_test_batches(sentences, batch_size, max_len=None):
   """
     load test data
@@ -242,7 +260,24 @@ def get_test_batches_with_fe(sentences, ex_features, batch_size, max_len=None):
     seq_len = [max_len] * seq.shape[0]
     all_batches.append((seq, seq_len, ex_batch))
   return all_batches
-  
+
+def get_test_batches_with_charfe(sentences, chars, ex_features, batch_size, max_len=None):
+  """
+    read all data into ram once
+  """
+  minibatches = get_batchidx(len(sentences), batch_size, shuffle=False)
+  all_batches = []
+  for minibatch in minibatches:
+    seq_batch = [sentences[t] for t in minibatch]
+    ex_batch = ex_features[minibatch]
+    char_batch = [chars[t] for t in minibatch]
+    seq = tf.keras.preprocessing.sequence.pad_sequences(seq_batch, max_len)
+    ch = map(lambda x: tf.keras.preprocessing.sequence.pad_sequences(x, 8), char_batch)
+    ch = tf.keras.preprocessing.sequence.pad_sequences(ch, max_len)
+    seq_len = [max_len] * seq.shape[0]
+    all_batches.append((seq, seq_len, ch, ex_batch))
+  return all_batches
+
 def get_config_proto(log_device_placement=False, allow_soft_placement=True):
   config_proto = tf.ConfigProto(
       log_device_placement=log_device_placement,
