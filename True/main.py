@@ -89,7 +89,7 @@ def main(args):
       elif args.model_type == "chrnn":
         model = TextRNNChar(args, "TextRNNChar")
       elif args.model_type == "chcnn":
-        model = TextRNNChar(args, "TextCNNChar")
+        model = TextCNNChar(args, "TextCNNChar")
       elif args.model_type == "rnnfe2":
         model = TextRNNFE2(args, "TextCNNCharFE2")
       elif args.model_type == "chrnnfe":
@@ -128,9 +128,13 @@ def main(args):
           train_batch = utils.get_batches(x_train, y_train, args.batch_size, args.max_len)
           valid_batch = utils.get_batches(x_eval, y_eval, max_size, args.max_len)
 
-        elif args.model_type in ["chrnn", "chcnn"]:
+        elif args.model_type in ["chrnn"]:
           train_batch = utils.get_batches_with_char(x_train, char_train, y_train, args.batch_size, args.max_len)
           valid_batch = utils.get_batches_with_char(x_eval, char_eval, y_eval, max_size, args.max_len)
+
+        elif args.model_type in ["chcnn"]:
+          train_batch = utils.get_batches_with_char(x_train, char_train, y_train, args.batch_size // 2, args.max_len)
+          valid_batch = utils.get_batches_with_char(x_eval, char_eval, y_eval, args.batch_size // 2, args.max_len)
 
         elif args.model_type in ["rnnfe", "cnnfe", "rnnfe2"]:
           train_batch = utils.get_batches_with_fe(x_train, y_train, ex_features, args.batch_size, args.max_len)
@@ -240,13 +244,17 @@ def run_test(args, model, sess):
   ex_features = add_features("../data/test.csv")
   if args.model_type in ["cnn"]:
     test_batch = utils.get_test_batches(x_vector, args.max_size_cnn, args.max_len)
-  elif args.model_type in ["rnn", "attention"]:
+  elif args.model_type in ["rnn"]:
     test_batch = utils.get_test_batches(x_vector, args.max_size_rnn, args.max_len)
   elif args.model_type in ["chrnn"]:
     test_batch = utils.get_test_batches_with_char(x_vector, char_vector, args.max_size_rnn, args.max_len)
-  elif args.model_type in ["rnnfe", "cnnfe"]:
+  elif args.model_type in ["chcnn"]:
+    test_batch = utils.get_test_batches_with_char(x_vector, char_vector, args.batch_size // 2, args.max_len)
+  elif args.model_type in ["rnnfe", "cnnfe", "rnnfe2"]:
     test_batch = utils.get_test_batches_with_fe(x_vector, ex_features, args.max_size_rnn, args.max_len)
-
+  elif args.model_type in ["chrnnfe"]:
+    test_batch = utils.get_test_batches_with_charfe(x_vector, char_vector, ex_features, args.max_size_rnn, args.max_len)
+    
   total_logits = []
   for batch in test_batch:
     if args.model_type in ["cnn", "rnn"]:
@@ -255,7 +263,7 @@ def run_test(args, model, sess):
     elif args.model_type in ["chrnn", "chcnn"]:
       comments, comments_length, chs = batch
       logits = model.get_logits(sess, comments, comments_length, chs).tolist()
-    elif args.model_type in ["rnnfe", "cnnfe", "rnnfe"]:
+    elif args.model_type in ["rnnfe", "cnnfe", "rnnfe2"]:
       comments, comments_length, exs = batch
       logits = model.get_logits(sess, comments, comments_length, exs).tolist()
     elif args.model_type in ["chrnnfe"]:
@@ -275,6 +283,6 @@ def write_results(logits, model_type):
 if __name__ == '__main__':
   args = config.get_args()
   os.environ["CUDA_VISIBLE_DEVICES"] = "0"
-  if args.model_type in ["cnn", "chrnn", "chrnnfe"]:
+  if args.model_type in ["cnn", "chrnn", "chrnnfe", "cnnfe"]:
     os.environ["CUDA_VISIBLE_DEVICES"] = "1"
   main(args)
