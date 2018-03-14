@@ -7,7 +7,7 @@ class Base(object):
     self.max_len = args.max_len
     self.nb_classes = args.nb_classes
     self.vocab_size = args.vocab_size
-    self.embed_size = args.embed_size // 2
+    self.embed_size = args.embed_size
     self.max_grad_norm = args.max_grad_norm
     self.cell_type = args.cell_type
     self.dropout_eb = args.dropout_eb
@@ -474,7 +474,7 @@ class TextRNNChar(Base):
                                       dtype=tf.float32)
     self.embed_inp_char = tf.nn.embedding_lookup(self.embedding_char, self.char_x, name="embedded_input_char")
 
-    with tf.variable_scope("rnn_char"):
+    with tf.variable_scope("cnn_char"):
       filter_shape = [1, self.char_filter_size, self.char_embed_size, 100]
       weight = self._weight_variable(filter_shape, name="char_weight")
       bias = self._bias_variable(self.char_num_filters, name="char_bias")
@@ -569,14 +569,13 @@ class TextCNNChar(Base):
                           padding="VALID",
                           name="chconv")
       char_feature = tf.reduce_max(tf.nn.relu(conv + bias), 2) 
-
       embed_input = tf.concat([self.embed_inp, char_feature], -1)
       embed_input = tf.layers.dropout(embed_input, self.eb_dropout)
       embed_exp = tf.expand_dims(embed_input, -1)
       pooling_output = []
       for i, filter_size in enumerate(self.filter_sizes):
         with tf.name_scope("conv-maxpool-%s" % filter_size):
-          filter_shape = [filter_size, self.embed_size, 1, self.num_filters]
+          filter_shape = [filter_size, self.embed_size + 100, 1, self.num_filters]
           weight = self._weight_variable(filter_shape, name=("weight_%d" % i))
           bias = self._bias_variable(self.num_filters, name=("bias_%d" % i))
           conv = tf.nn.conv2d(input=embed_exp,
@@ -584,7 +583,6 @@ class TextCNNChar(Base):
                               strides=[1, 1, 1, 1],
                               padding="VALID",
                               name="conv")
-          conv = tf.layers.batch_normalization(conv)
           hidden = tf.nn.relu(conv + bias)
           max_pool = tf.nn.max_pool(value=hidden,
                                     ksize=[1, self.max_len - filter_size + 1, 1, 1],
@@ -596,13 +594,12 @@ class TextCNNChar(Base):
       num_filters_total = self.num_filters * len(self.filter_sizes)
       h_pool = tf.concat(pooling_output, -1)
       self.h_pool_flat = tf.reshape(h_pool, [-1, num_filters_total])
-      
+
+    with tf.name_scope("dropout"):
+      self.h_drop = tf.nn.dropout(self.h_pool_flat, self.dropout_cnn)
 
     with tf.name_scope("output"):
-      tmp = tf.reshape(self.rnn_output, [-1, self.hidden_size * 2])
-      features = tf.concat([self.rnn_state, tmp], -1)
-      pre_score = tf.layers.dense(features, 32, activation=tf.nn.elu, name="pre_scores")
-      self.scores = tf.layers.dense(pre_score, self.nb_classes, name="scores")
+      self.scores = tf.layers.dense(self.h_drop, self.nb_classes, name="scores")
       self.logits = tf.nn.sigmoid(self.scores)
 
     with tf.name_scope("loss"):
@@ -685,6 +682,7 @@ class TextRNNCharFE(Base):
       tmp = tf.reshape(self.rnn_output, [-1, self.hidden_size * 2])
       ex_features = tf.layers.dense(self.ex_features, 10, name="ex_fea_eb")
       features = tf.concat([self.rnn_state, tmp, ex_features], -1)
+      features = tf.layers.dropout(features, 0.2)
       pre_score = tf.layers.dense(features, 32, activation=tf.nn.elu, name="pre_scores")
       self.scores = tf.layers.dense(pre_score, self.nb_classes, name="scores")
       self.logits = tf.nn.sigmoid(self.scores)
