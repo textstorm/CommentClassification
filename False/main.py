@@ -9,7 +9,7 @@ import os
 from sklearn.model_selection import KFold
 from scipy.sparse import hstack, csr_matrix
 from model import TextCNN, TextRNN, TextRNNChar, TextCNNChar, TextRNNFE
-from model import TextCNNFE, TextRNNCharFE, TextRNNFE2
+from model import TextCNNFE, TextRNNCharFE
 import tensorflow as tf
 
 def add_features(file):
@@ -62,8 +62,6 @@ def main(args):
     max_step = args.max_step_rnn
     max_size = args.max_size_rnn
     nb_epochs = args.nb_epochs_rnn
-    if args.model_type == "chrnn":
-      nb_epochs = 3
 
   ex_features = add_features("../data/train.csv")
   nfolds = args.nfolds
@@ -143,7 +141,7 @@ def main(args):
             comments, comments_length, chs, labels = batch
             _, loss_t, global_step, batch_size = model.train(sess, comments, comments_length, chs, labels)
 
-          elif args.model_type in ["rnnfe", "cnnfe". "rnnfe2"]:
+          elif args.model_type in ["rnnfe", "cnnfe", "rnnfe2"]:
             comments, comments_length, exs, labels = batch
             _, loss_t, global_step, batch_size = model.train(sess, comments, comments_length, labels, exs)
 
@@ -154,10 +152,10 @@ def main(args):
           loss += loss_t * batch_size
           total_comments += batch_size
 
-          if global_step % 300 == 0:
+          if global_step % 200 == 0:
             print "epoch %d step %d loss %f time %.2fs"%(epoch,global_step,loss_t,time.time()-step_start_time)
 
-          if global_step % 500 == 0:
+          if global_step % 200 == 0:
             run_valid(valid_batch, model, sess, args.model_type)
             # model.saver.save(sess, os.path.join(save_dir, "model.ckpt"), global_step=global_step)  
             step_start_time = time.time()
