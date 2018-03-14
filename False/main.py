@@ -65,8 +65,9 @@ def main(args):
 
   ex_features = add_features("../data/train.csv")
   nfolds = args.nfolds
-  skf = KFold(n_splits=nfolds, shuffle=True, random_state=123)
+  skf = KFold(n_splits=nfolds, shuffle=True, random_state=2018)
   test_prob = []
+  stack_logits = np.zeros((len(x_vector), len(target_cols)))
   for (f, (train_index, test_index)) in enumerate(skf.split(x_vector)):
     x_train, x_eval = x_vector[train_index], x_vector[test_index]
     char_train, char_eval = char_vector[train_index], char_vector[test_index]
@@ -156,7 +157,7 @@ def main(args):
             print "epoch %d step %d loss %f time %.2fs"%(epoch,global_step,loss_t,time.time()-step_start_time)
 
           if global_step % 200 == 0:
-            run_valid(valid_batch, model, sess, args.model_type)
+            _ = run_valid(valid_batch, model, sess, args.model_type)
             # model.saver.save(sess, os.path.join(save_dir, "model.ckpt"), global_step=global_step)  
             step_start_time = time.time()
 
@@ -165,12 +166,15 @@ def main(args):
         print "%.2f seconds in this epoch with train loss %f" % (epoch_time, loss / total_comments)
 
       test_prob.append(run_test(args, model, sess))
+      stack_logits[test_index] = run_valid(valid_batch, model, sess, args.model_type)
+
   preds = np.zeros((test_prob[0].shape[0], len(target_cols)))
   for prob in test_prob:
     preds += prob
     print prob[0]
   preds /= len(test_prob)
   print len(test_prob)
+  write_predict(stack_logits)
   write_results(preds, args.model_type)
 
 def run_valid(valid_data, model, sess, model_type):
@@ -201,6 +205,7 @@ def run_valid(valid_data, model, sess, model_type):
   sess.run(tf.local_variables_initializer())
   auc_tf = sess.run(auc_tf)
   print "auc %f in %d valid comments %f" % (auc_tf[1], np.array(total_logits).shape[0], loss/len(total_labels))  
+  return total_logits
 
 def run_test(args, model, sess):
   test = pd.read_csv(args.test_dir)
@@ -257,6 +262,14 @@ def run_test(args, model, sess):
       logits = model.get_logits(sess, comments, comments_length, chs, exs).tolist()
     total_logits += logits
   return np.array(total_logits)
+
+def write_predict(logits):
+  cols = ['toxic', 'severe_toxic', 'obscene', 'threat', 'insult', 'identity_hate']
+  train = pd.read_csv('../data/train.csv')    
+  trainid = pd.DataFrame({'id': train["id"]})
+  train = pd.concat([trainid, pd.DataFrame(logits, columns=cols)], axis=1)
+  train.to_csv('logits.csv', index=False)
+  print train.shape
 
 def write_results(logits, model_type):
   cols = ['toxic', 'severe_toxic', 'obscene', 'threat', 'insult', 'identity_hate']
