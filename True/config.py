@@ -34,7 +34,7 @@ def get_args():
   parser.add_argument('--char_filter_size', type=int, default=5, help='char filter size')
   parser.add_argument('--num_filters', type=int, default=128, help='num of filters')
   parser.add_argument('--char_num_filters', type=int, default=100, help='num of char filters')
-  parser.add_argument('--dropout_cnn', type=float, default=0.5, help='keep prob in cnn')
+  parser.add_argument('--dropout_cnn', type=float, default=0.6, help='keep prob in cnn')
   parser.add_argument('--max_size_cnn', type=int, default=1000, help='max numbers every batch of cnn')
   parser.add_argument('--max_step_cnn', type=int, default=20000, help='max cnn train step') #tobe
   parser.add_argument('--nb_epochs_cnn', type=int, default=3, help='Number of epoch')
@@ -48,7 +48,7 @@ def get_args():
   parser.add_argument('--nb_epochs_rnn', type=int, default=3, help='Number of epoch')
 
   parser.add_argument('--batch_size', type=int, default=128, help='example numbers every batch')
-  parser.add_argument('--learning_rate', type=float, default=0.001, help='initial learning rate')
+  parser.add_argument('--learning_rate', type=float, default=0.0008, help='initial learning rate')
   parser.add_argument('--lr_decay', type=float, default=0.5, help='learning rate decay rate')
   parser.add_argument('--max_grad_norm', type=float, default=5.0, help='max norm of gradient')
   parser.add_argument('--nb_epochs', type=int, default=10, help='Number of epoch')
