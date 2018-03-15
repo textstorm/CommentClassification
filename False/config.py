@@ -35,7 +35,7 @@ def get_args():
   parser.add_argument('--dropout_cnn', type=float, default=0.5, help='keep prob in cnn')
   parser.add_argument('--max_size_cnn', type=int, default=1000, help='max numbers every batch of cnn')
   parser.add_argument('--max_step_cnn', type=int, default=20000, help='max cnn train step') #tobe
-  parser.add_argument('--nb_epochs_cnn', type=int, default=4, help='Number of epoch')
+  parser.add_argument('--nb_epochs_cnn', type=int, default=5, help='Number of epoch')
   
   #rnn
   parser.add_argument('--cell_type', type=str, default="gru", help='lstm or gru')
