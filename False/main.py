@@ -9,7 +9,7 @@ import os
 from sklearn.model_selection import KFold
 from scipy.sparse import hstack, csr_matrix
 from model import TextCNN, TextRNN, TextRNNChar, TextCNNChar, TextRNNFE
-from model import TextCNNFE, TextRNNCharFE
+from model import TextCNNFE, TextRNNCharFE, TextRCNN
 import tensorflow as tf
 
 def add_features(file):
@@ -58,7 +58,7 @@ def main(args):
     max_step = args.max_step_cnn
     max_size = args.max_size_cnn
     nb_epochs = args.nb_epochs_cnn
-  elif args.model_type in ["rnn", "rnnfe", "rnnfe2", "chrnn", "chrnnfe"]: 
+  elif args.model_type in ["rnn", "rnnfe", "rnnfe2", "chrnn", "chrnnfe", "rcnn"]: 
     max_step = args.max_step_rnn
     max_size = args.max_size_rnn
     nb_epochs = args.nb_epochs_rnn
@@ -83,6 +83,8 @@ def main(args):
         model = TextRNN(args, "TextRNN")
       elif args.model_type == "rnnfe":
         model = TextRNNFE(args, "TextRNNFE")
+      elif args.model_type == "rcnn":
+        model = TextRCNN(args, "TextRCNN")
       elif args.model_type == "attention":
         model = RNNWithAttention(args, "Attention")
       elif args.model_type == "chrnn":
@@ -115,7 +117,7 @@ def main(args):
       for epoch in range(1, nb_epochs + 1):
         print "epoch %d start with lr %f" % (epoch, model.learning_rate.eval(session=sess)), "\n", "- " * 50
         loss, total_comments = 0.0, 0
-        if args.model_type in ["cnn", "rnn"]:
+        if args.model_type in ["cnn", "rnn", "rcnn"]:
           train_batch = utils.get_batches(x_train, y_train, args.batch_size, args.max_len)
           valid_batch = utils.get_batches(x_eval, y_eval, max_size, args.max_len)
 
@@ -134,7 +136,7 @@ def main(args):
         epoch_start_time = time.time()
         step_start_time = epoch_start_time
         for idx, batch in enumerate(train_batch):
-          if args.model_type in ["cnn", "rnn"]:
+          if args.model_type in ["cnn", "rnn", "rcnn"]:
             comments, comments_length, labels = batch
             _, loss_t, global_step, batch_size = model.train(sess, comments, comments_length, labels)
 
@@ -174,7 +176,7 @@ def main(args):
     print prob[0]
   preds /= len(test_prob)
   print len(test_prob)
-  write_predict(stack_logits)
+  write_predict(stack_logits, args.model_type)
   write_results(preds, args.model_type)
 
 def run_valid(valid_data, model, sess, model_type):
@@ -182,7 +184,7 @@ def run_valid(valid_data, model, sess, model_type):
   total_labels = []
   loss = 0.0
   for batch in valid_data:
-    if model_type in ["cnn", "rnn"]:
+    if model_type in ["cnn", "rnn", "rcnn"]:
       comments, comments_length, labels = batch
       loss_t, logits_t, batch_size = model.test(sess, comments, comments_length, labels)
 
@@ -235,7 +237,7 @@ def run_test(args, model, sess):
   ex_features = add_features("../data/test.csv")
   if args.model_type in ["cnn"]:
     test_batch = utils.get_test_batches(x_vector, args.max_size_cnn, args.max_len)
-  elif args.model_type in ["rnn"]:
+  elif args.model_type in ["rnn", "rcnn"]:
     test_batch = utils.get_test_batches(x_vector, args.max_size_rnn, args.max_len)
   elif args.model_type in ["chrnn"]:
     test_batch = utils.get_test_batches_with_char(x_vector, char_vector, args.max_size_rnn, args.max_len)
@@ -248,7 +250,7 @@ def run_test(args, model, sess):
 
   total_logits = []
   for batch in test_batch:
-    if args.model_type in ["cnn", "rnn"]:
+    if args.model_type in ["cnn", "rnn", "rcnn"]:
       comments, comments_length = batch
       logits = model.get_logits(sess, comments, comments_length).tolist()
     elif args.model_type in ["chrnn", "chcnn"]:
@@ -263,12 +265,12 @@ def run_test(args, model, sess):
     total_logits += logits
   return np.array(total_logits)
 
-def write_predict(logits):
+def write_predict(logits, model_type):
   cols = ['toxic', 'severe_toxic', 'obscene', 'threat', 'insult', 'identity_hate']
   train = pd.read_csv('../data/train.csv')    
   trainid = pd.DataFrame({'id': train["id"]})
   train = pd.concat([trainid, pd.DataFrame(logits, columns=cols)], axis=1)
-  train.to_csv('logits.csv', index=False)
+  train.to_csv('logits-%s.csv' % model_type, index=False)
   print train.shape
 
 def write_results(logits, model_type):
