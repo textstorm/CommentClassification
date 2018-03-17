@@ -154,11 +154,11 @@ def get_batchidx(n_data, batch_size, shuffle=True):
     batch_index.append(idx_list[start_idx: min(start_idx + batch_size, n_data)])
   return batch_index
 
-def get_batches(sentences, labels, batch_size, max_len=None):
+def get_batches(sentences, labels, batch_size, max_len=None, shuffle=True):
   """
     read all data into ram once
   """
-  minibatches = get_batchidx(len(sentences), batch_size)
+  minibatches = get_batchidx(len(sentences), batch_size, shuffle=shuffle)
   all_batches = []
   for minibatch in minibatches:
     seq_batch = [sentences[t] for t in minibatch]
@@ -168,11 +168,11 @@ def get_batches(sentences, labels, batch_size, max_len=None):
     all_batches.append((seq, seq_len, lab_batch))
   return all_batches
 
-def get_batches_with_char(sentences, chars, labels, batch_size, max_len=None):
+def get_batches_with_char(sentences, chars, labels, batch_size, max_len=None, shuffle=True):
   """
     read all data into ram once
   """
-  minibatches = get_batchidx(len(sentences), batch_size)
+  minibatches = get_batchidx(len(sentences), batch_size, shuffle=shuffle)
   all_batches = []
   for minibatch in minibatches:
     seq_batch = [sentences[t] for t in minibatch]
@@ -185,11 +185,11 @@ def get_batches_with_char(sentences, chars, labels, batch_size, max_len=None):
     all_batches.append((seq, seq_len, ch, lab_batch))
   return all_batches
 
-def get_batches_with_fe(sentences, labels, ex_features, batch_size, max_len=None):
+def get_batches_with_fe(sentences, labels, ex_features, batch_size, max_len=None, shuffle=True):
   """
     read all data into ram once
   """
-  minibatches = get_batchidx(len(sentences), batch_size)
+  minibatches = get_batchidx(len(sentences), batch_size, shuffle=shuffle)
   all_batches = []
   for minibatch in minibatches:
     seq_batch = [sentences[t] for t in minibatch]
@@ -200,11 +200,11 @@ def get_batches_with_fe(sentences, labels, ex_features, batch_size, max_len=None
     all_batches.append((seq, seq_len, ex_batch, lab_batch))
   return all_batches
 
-def get_batches_with_charfe(sentences, chars, labels, ex_features, batch_size, max_len=None):
+def get_batches_with_charfe(sentences, chars, labels, ex_features, batch_size, max_len=None, shuffle=True):
   """
     read all data into ram once
   """
-  minibatches = get_batchidx(len(sentences), batch_size)
+  minibatches = get_batchidx(len(sentences), batch_size, shuffle=shuffle)
   all_batches = []
   for minibatch in minibatches:
     seq_batch = [sentences[t] for t in minibatch]
