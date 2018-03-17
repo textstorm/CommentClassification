@@ -179,7 +179,7 @@ def get_batches_with_char(sentences, chars, labels, batch_size, max_len=None, sh
     char_batch = [chars[t] for t in minibatch]
     lab_batch = [labels[t] for t in minibatch]
     seq = tf.keras.preprocessing.sequence.pad_sequences(seq_batch, max_len)
-    ch = map(lambda x: tf.keras.preprocessing.sequence.pad_sequences(x, 8), char_batch)
+    ch = map(lambda x: tf.keras.preprocessing.sequence.pad_sequences(x, 10), char_batch)
     ch = tf.keras.preprocessing.sequence.pad_sequences(ch, max_len)
     seq_len = [max_len] * seq.shape[0]
     all_batches.append((seq, seq_len, ch, lab_batch))
@@ -212,7 +212,7 @@ def get_batches_with_charfe(sentences, chars, labels, ex_features, batch_size, m
     ex_batch = ex_features[minibatch]
     lab_batch = [labels[t] for t in minibatch]
     seq = tf.keras.preprocessing.sequence.pad_sequences(seq_batch, max_len)
-    ch = map(lambda x: tf.keras.preprocessing.sequence.pad_sequences(x, 8), char_batch)
+    ch = map(lambda x: tf.keras.preprocessing.sequence.pad_sequences(x, 10), char_batch)
     ch = tf.keras.preprocessing.sequence.pad_sequences(ch, max_len)
     seq_len = [max_len] * seq.shape[0]
     all_batches.append((seq, seq_len, ch, ex_batch, lab_batch))
@@ -241,7 +241,7 @@ def get_test_batches_with_char(sentences, chars, batch_size, max_len=None):
     seq_batch = [sentences[t] for t in minibatch]
     char_batch = [chars[t] for t in minibatch]
     seq = tf.keras.preprocessing.sequence.pad_sequences(seq_batch, max_len)
-    ch = map(lambda x: tf.keras.preprocessing.sequence.pad_sequences(x, 8), char_batch)
+    ch = map(lambda x: tf.keras.preprocessing.sequence.pad_sequences(x, 10), char_batch)
     ch = tf.keras.preprocessing.sequence.pad_sequences(ch, max_len)
     seq_len = [max_len] * seq.shape[0]
     all_batches.append((seq, seq_len, ch))
@@ -272,7 +272,7 @@ def get_test_batches_with_charfe(sentences, chars, ex_features, batch_size, max_
     ex_batch = ex_features[minibatch]
     char_batch = [chars[t] for t in minibatch]
     seq = tf.keras.preprocessing.sequence.pad_sequences(seq_batch, max_len)
-    ch = map(lambda x: tf.keras.preprocessing.sequence.pad_sequences(x, 8), char_batch)
+    ch = map(lambda x: tf.keras.preprocessing.sequence.pad_sequences(x, 10), char_batch)
     ch = tf.keras.preprocessing.sequence.pad_sequences(ch, max_len)
     seq_len = [max_len] * seq.shape[0]
     all_batches.append((seq, seq_len, ch, ex_batch))
