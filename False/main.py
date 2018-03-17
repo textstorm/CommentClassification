@@ -119,19 +119,19 @@ def main(args):
         loss, total_comments = 0.0, 0
         if args.model_type in ["cnn", "rnn", "rcnn"]:
           train_batch = utils.get_batches(x_train, y_train, args.batch_size, args.max_len)
-          valid_batch = utils.get_batches(x_eval, y_eval, max_size, args.max_len)
+          valid_batch = utils.get_batches(x_eval, y_eval, max_size, args.max_len, False)
 
         elif args.model_type in ["chrnn", "chcnn"]:
           train_batch = utils.get_batches_with_char(x_train, char_train, y_train, args.batch_size, args.max_len)
-          valid_batch = utils.get_batches_with_char(x_eval, char_eval, y_eval, max_size, args.max_len)
+          valid_batch = utils.get_batches_with_char(x_eval, char_eval, y_eval, max_size, args.max_len, False)
 
         elif args.model_type in ["rnnfe", "cnnfe", "rnnfe2"]:
           train_batch = utils.get_batches_with_fe(x_train, y_train, ex_features, args.batch_size, args.max_len)
-          valid_batch = utils.get_batches_with_fe(x_eval, y_eval, ex_features, max_size, args.max_len)
+          valid_batch = utils.get_batches_with_fe(x_eval, y_eval, ex_features, max_size, args.max_len, False)
 
         elif args.model_type in ["chrnnfe"]:
           train_batch = utils.get_batches_with_charfe(x_train, char_train, y_train, ex_features, args.batch_size, args.max_len)
-          valid_batch = utils.get_batches_with_charfe(x_eval, char_eval, y_eval, ex_features, max_size, args.max_len)
+          valid_batch = utils.get_batches_with_charfe(x_eval, char_eval, y_eval, ex_features, max_size, args.max_len, False)
 
         epoch_start_time = time.time()
         step_start_time = epoch_start_time
