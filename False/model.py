@@ -182,7 +182,7 @@ class TextCNNFE(Base):
       self.h_drop = tf.nn.dropout(self.h_pool_flat, self.dropout_cnn)
 
     with tf.name_scope("output"):
-      ex_features = tf.layers.dense(self.ex_features, 10, name="ex_fea_eb")
+      ex_features = tf.layers.dense(self.ex_features, self.fe_size, name="ex_fea_eb")
       tmp = tf.concat([self.h_drop, ex_features], -1)
       self.scores = tf.layers.dense(tmp, self.nb_classes, name="scores")
       self.logits = tf.nn.sigmoid(self.scores)
@@ -238,7 +238,7 @@ class TextCNNChar(Base):
     self.embed_inp_char = tf.nn.embedding_lookup(self.embedding_char, self.char_x, name="embedded_input_char")
 
     with tf.variable_scope("cnn_char"):
-      filter_shape = [1, self.char_filter_size, self.char_embed_size, 100]
+      filter_shape = [1, self.char_filter_size, self.char_embed_size, self.char_num_filters]
       weight = self._weight_variable(filter_shape, name="char_weight")
       bias = self._bias_variable(self.char_num_filters, name="char_bias")
       conv = tf.nn.conv2d(input=self.embed_inp_char,
@@ -254,7 +254,102 @@ class TextCNNChar(Base):
       pooling_output = []
       for i, filter_size in enumerate(self.filter_sizes):
         with tf.name_scope("conv-maxpool-%s" % filter_size):
-          filter_shape = [filter_size, self.embed_size + 100, 1, self.num_filters]
+          filter_shape = [filter_size, self.embed_size + self.char_num_filters, 1, self.num_filters]
+          weight = self._weight_variable(filter_shape, name=("weight_%d" % i))
+          bias = self._bias_variable(self.num_filters, name=("bias_%d" % i))
+          conv = tf.nn.conv2d(input=embed_exp,
+                              filter=weight,
+                              strides=[1, 1, 1, 1],
+                              padding="VALID",
+                              name="conv")
+          conv = tf.layers.batch_normalization(conv)
+          hidden = tf.nn.relu(conv + bias)
+          max_pool = tf.nn.max_pool(value=hidden,
+                                    ksize=[1, self.max_len - filter_size + 1, 1, 1],
+                                    strides=[1, 1, 1, 1],
+                                    padding="VALID",
+                                    name="pooling")
+          pooling_output.append(max_pool)
+
+      num_filters_total = self.num_filters * len(self.filter_sizes)
+      h_pool = tf.concat(pooling_output, -1)
+      self.h_pool_flat = tf.reshape(h_pool, [-1, num_filters_total])
+      
+    with tf.name_scope("dropout"):
+      self.h_drop = tf.nn.dropout(self.h_pool_flat, self.dropout_cnn)
+    
+    with tf.name_scope("output"):
+      self.scores = tf.layers.dense(self.h_drop, self.nb_classes, name="scores")
+      self.logits = tf.nn.sigmoid(self.scores)
+
+    with tf.name_scope("loss"):
+      losses = tf.nn.sigmoid_cross_entropy_with_logits(logits=self.scores, labels=self.input_y)
+      self.loss = tf.reduce_mean(losses)
+
+    with tf.name_scope('train'):
+      grads_and_vars = self.optimizer.compute_gradients(self.loss)
+      grads_and_vars = [(tf.clip_by_norm(g, self.max_grad_norm), v) for g, v in grads_and_vars]
+      self.train_op = self.optimizer.apply_gradients(grads_and_vars, global_step=self.global_step)
+
+    self.tvars = tf.trainable_variables()
+    self.saver = tf.train.Saver(tf.global_variables())
+
+  def train(self, sess, input_x, sequence_length, char_x, input_y):
+    return sess.run([self.train_op, 
+                     self.loss,
+                     self.global_step,
+                     self.batch_size], 
+                     feed_dict={self.input_x: input_x, self.input_y: input_y, 
+                                self.sequence_length: sequence_length, self.char_x: char_x, self.is_train: True})
+
+  def test(self, sess, input_x, sequence_length, char_x, input_y):
+    return sess.run([self.loss, 
+                     self.logits, 
+                     self.batch_size], 
+                     feed_dict={self.input_x: input_x, self.input_y: input_y,
+                                self.sequence_length: sequence_length, self.char_x: char_x,self.is_train: False})
+
+  def get_logits(self, sess, input_x, sequence_length, char_x):
+    return sess.run(self.logits, feed_dict={self.input_x: input_x,
+        self.sequence_length: sequence_length, self.char_x: char_x, self.is_train: False})
+
+class TextCNNChar2(Base):
+  def __init__(self, args, name=None):
+    super(TextCNNChar2, self).__init__(args=args, name=name)
+    self.hidden_size = args.hidden_size
+    self.model_type = args.model_type
+    self.rnn_layers = args.rnn_layers
+    self.filter_sizes = args.filter_sizes
+    self.num_filters = args.num_filters
+    self.char_embed_size = args.char_embed_size
+    self.char_vocab_size = args.char_vocab_size
+    self.char_filter_size = args.char_filter_size
+    self.char_num_filters = args.char_num_filters
+
+    self.char_x = tf.placeholder(tf.int32, [None, None, None], name='char_x')
+
+    self.embedding_char = tf.get_variable("embedding_char", [self.char_vocab_size, self.char_embed_size], 
+                                      dtype=tf.float32)
+    self.embed_inp_char = tf.nn.embedding_lookup(self.embedding_char, self.char_x, name="embedded_input_char")
+    embed_input = tf.layers.dropout(self.embed_inp_char, self.eb_dropout)
+    with tf.variable_scope("cnn_char"):
+      filter_shape = [1, self.char_filter_size, self.char_embed_size, self.char_num_filters]
+      weight = self._weight_variable(filter_shape, name="char_weight")
+      bias = self._bias_variable(self.char_num_filters, name="char_bias")
+      conv = tf.nn.conv2d(input=embed_input,
+                          filter=weight,
+                          strides=[1, 1, 1, 1],
+                          padding="VALID",
+                          name="chconv")
+      char_feature = tf.reduce_max(tf.nn.relu(conv + bias), 2) 
+
+      embed_input = tf.concat([self.embed_inp, char_feature], -1)
+      embed_input = tf.layers.dropout(embed_input, self.eb_dropout)
+      embed_exp = tf.expand_dims(embed_input, -1)
+      pooling_output = []
+      for i, filter_size in enumerate(self.filter_sizes):
+        with tf.name_scope("conv-maxpool-%s" % filter_size):
+          filter_shape = [1, filter_size, self.embed_size + self.char_num_filters, self.num_filters]
           weight = self._weight_variable(filter_shape, name=("weight_%d" % i))
           bias = self._bias_variable(self.num_filters, name=("bias_%d" % i))
           conv = tf.nn.conv2d(input=embed_exp,
@@ -380,7 +475,7 @@ class TextRNNFE(Base):
 
     with tf.name_scope("output"):
       tmp = tf.reshape(self.rnn_output, [-1, self.hidden_size * 2])
-      ex_features = tf.layers.dense(self.ex_features, 10, name="ex_fea_eb")
+      ex_features = tf.layers.dense(self.ex_features, self.fe_size, name="ex_fea_eb")
       features = tf.concat([self.rnn_state, tmp, ex_features], -1)
       pre_score = tf.layers.dense(features, 32, activation=tf.nn.elu, name="pre_scores")
       self.scores = tf.layers.dense(pre_score, self.nb_classes, name="scores")
@@ -435,7 +530,7 @@ class TextRNNChar(Base):
     self.embed_inp_char = tf.nn.embedding_lookup(self.embedding_char, self.char_x, name="embedded_input_char")
 
     with tf.variable_scope("rnn_char"):
-      filter_shape = [1, self.char_filter_size, self.char_embed_size, 100]
+      filter_shape = [1, self.char_filter_size, self.char_embed_size, self.char_num_filters]
       weight = self._weight_variable(filter_shape, name="char_weight")
       bias = self._bias_variable(self.char_num_filters, name="char_bias")
       conv = tf.nn.conv2d(input=self.embed_inp_char,
@@ -518,7 +613,7 @@ class TextRNNCharFE(Base):
     self.embed_inp_char = tf.nn.embedding_lookup(self.embedding_char, self.char_x, name="embedded_input_char")
 
     with tf.variable_scope("rnn_char"):
-      filter_shape = [1, self.char_filter_size, self.char_embed_size, 100]
+      filter_shape = [1, self.char_filter_size, self.char_embed_size, self.char_num_filters]
       weight = self._weight_variable(filter_shape, name="char_weight")
       bias = self._bias_variable(self.char_num_filters, name="char_bias")
       conv = tf.nn.conv2d(input=self.embed_inp_char,
@@ -547,7 +642,7 @@ class TextRNNCharFE(Base):
 
     with tf.name_scope("output"):
       tmp = tf.reshape(self.rnn_output, [-1, self.hidden_size * 2])
-      ex_features = tf.layers.dense(self.ex_features, 10, name="ex_fea_eb")
+      ex_features = tf.layers.dense(self.ex_features, self.fe_size, name="ex_fea_eb")
       features = tf.concat([self.rnn_state, tmp, ex_features], -1)
       features = tf.layers.dropout(features, 0.2)
       pre_score = tf.layers.dense(features, 32, activation=tf.nn.elu, name="pre_scores")
