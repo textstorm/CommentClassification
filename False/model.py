@@ -150,6 +150,7 @@ class TextCNNFE(Base):
   def __init__(self, args, name=None):
     self.filter_sizes = args.filter_sizes
     self.num_filters = args.num_filters
+    self.fe_size = args.fe_size
 
     super(TextCNNFE, self).__init__(args=args, name=name)
     embed_input = tf.layers.dropout(self.embed_inp, self.eb_dropout)
@@ -466,6 +467,7 @@ class TextRNNFE(Base):
     self.hidden_size = args.hidden_size
     self.model_type = args.model_type
     self.rnn_layers = args.rnn_layers
+    self.fe_size = args.fe_size
 
     with tf.variable_scope("rnn"):
       num_layers = self.rnn_layers // 2
@@ -481,12 +483,15 @@ class TextRNNFE(Base):
         rnn_state = tuple(rnn_state[0][num_bi_layers - 1], rnn_state[1][num_bi_layers - 1])
       self.rnn_state = tf.concat(rnn_state, -1)
       rnn_output = tf.concat(rnn_output, -1)
-      self.rnn_output = tf.layers.max_pooling1d(rnn_output, self.max_len, 1)
+      max_pool = tf.layers.max_pooling1d(rnn_output, self.max_len, 1)
+      avg_pool = tf.layers.average_pooling1d(rnn_output, self.max_len, 1)
 
     with tf.name_scope("output"):
-      tmp = tf.reshape(self.rnn_output, [-1, self.hidden_size * 2])
+      self.max_pool = tf.reshape(max_pool, [-1, self.hidden_size * 2])
+      self.avg_pool = tf.reshape(avg_pool, [-1, self.hidden_size * 2])
       ex_features = tf.layers.dense(self.ex_features, self.fe_size, name="ex_fea_eb")
-      features = tf.concat([self.rnn_state, tmp, ex_features], -1)
+      features = tf.concat([self.rnn_state, self.max_pool, self.avg_pool, ex_features], -1)
+      features = tf.layers.dropout(features, self.dropout_cnn)
       pre_score = tf.layers.dense(features, 32, activation=tf.nn.elu, name="pre_scores")
       self.scores = tf.layers.dense(pre_score, self.nb_classes, name="scores")
       self.logits = tf.nn.sigmoid(self.scores)
