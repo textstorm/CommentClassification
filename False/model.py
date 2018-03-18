@@ -236,9 +236,10 @@ class TextCNNChar(Base):
     self.embedding_char = tf.get_variable("embedding_char", [self.char_vocab_size, self.char_embed_size], 
                                       dtype=tf.float32)
     self.embed_inp_char = tf.nn.embedding_lookup(self.embedding_char, self.char_x, name="embedded_input_char")
+    embed_input = tf.layers.dropout(self.embed_inp_char, self.eb_dropout)
 
     with tf.variable_scope("cnn_char"):
-      filter_shape = [1, self.char_filter_size, self.char_embed_size, self.char_num_filters]
+      filter_shape = [1, self.char_filter_size[2], self.char_embed_size, self.char_num_filters]
       weight = self._weight_variable(filter_shape, name="char_weight")
       bias = self._bias_variable(self.char_num_filters, name="char_bias")
       conv = tf.nn.conv2d(input=self.embed_inp_char,
@@ -331,17 +332,26 @@ class TextCNNChar2(Base):
     self.embedding_char = tf.get_variable("embedding_char", [self.char_vocab_size, self.char_embed_size], 
                                       dtype=tf.float32)
     self.embed_inp_char = tf.nn.embedding_lookup(self.embedding_char, self.char_x, name="embedded_input_char")
-    embed_input = tf.layers.dropout(self.embed_inp_char, self.eb_dropout)
+    embed_input_char = tf.layers.dropout(self.embed_inp_char, self.eb_dropout)
+
     with tf.variable_scope("cnn_char"):
-      filter_shape = [1, self.char_filter_size, self.char_embed_size, self.char_num_filters]
-      weight = self._weight_variable(filter_shape, name="char_weight")
-      bias = self._bias_variable(self.char_num_filters, name="char_bias")
-      conv = tf.nn.conv2d(input=embed_input,
-                          filter=weight,
-                          strides=[1, 1, 1, 1],
-                          padding="VALID",
-                          name="chconv")
-      char_feature = tf.reduce_max(tf.nn.relu(conv + bias), 2) 
+      char_pooling_output = []
+      for i, char_filter_size in enumerate(self.char_filter_size):
+        with tf.name_scope("conv-char_maxpool-%s" % filter_size):
+          char_filter_shape = [1, char_filter_size, self.char_embed_size, self.char_num_filters]
+          weight = self._weight_variable(char_filter_shape, name=("weight_%d" % i))
+          bias = self._bias_variable(self.char_num_filters, name=("bias_%d" % i))
+          conv = tf.nn.conv2d(input=embed_input_char,
+                              filter=weight,
+                              strides=[1, 1, 1, 1],
+                              padding="VALID",
+                              name="chconv")
+          char_feature = tf.reduce_max(tf.nn.relu(conv + bias), 2) 
+          char_pooling_output.append(char_feature)
+
+      num_char_filters_total = self.char_num_filters * len(self.char_filter_size)
+      char_feature = tf.concat(char_pooling_output, -1)
+      char_feature = tf.reshape(char_feature, [-1, num_char_filters_total])
 
       embed_input = tf.concat([self.embed_inp, char_feature], -1)
       embed_input = tf.layers.dropout(embed_input, self.eb_dropout)
@@ -528,12 +538,13 @@ class TextRNNChar(Base):
     self.embedding_char = tf.get_variable("embedding_char", [self.char_vocab_size, self.char_embed_size], 
                                       dtype=tf.float32)
     self.embed_inp_char = tf.nn.embedding_lookup(self.embedding_char, self.char_x, name="embedded_input_char")
+    embed_input_char = tf.layers.dropout(self.embed_inp_char, self.eb_dropout)
 
     with tf.variable_scope("rnn_char"):
-      filter_shape = [1, self.char_filter_size, self.char_embed_size, self.char_num_filters]
+      filter_shape = [1, self.char_filter_size[2], self.char_embed_size, self.char_num_filters]
       weight = self._weight_variable(filter_shape, name="char_weight")
       bias = self._bias_variable(self.char_num_filters, name="char_bias")
-      conv = tf.nn.conv2d(input=self.embed_inp_char,
+      conv = tf.nn.conv2d(input=embed_input_char,
                           filter=weight,
                           strides=[1, 1, 1, 1],
                           padding="VALID",
