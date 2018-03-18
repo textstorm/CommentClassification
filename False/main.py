@@ -9,7 +9,7 @@ import os
 from sklearn.model_selection import KFold
 from scipy.sparse import hstack, csr_matrix
 from model import TextCNN, TextRNN, TextRNNChar, TextCNNChar, TextRNNFE
-from model import TextCNNFE, TextRNNCharFE, TextRCNN
+from model import TextCNNFE, TextRNNCharFE, TextRCNN, TextCNNChar2
 import tensorflow as tf
 
 def add_features(file):
@@ -54,7 +54,7 @@ def main(args):
   if not os.path.exists(save_dir):
     os.makedirs(save_dir)
 
-  if args.model_type in ["cnn", "cnnfe", "chcnn"]:
+  if args.model_type in ["cnn", "cnnfe", "chcnn", "chcnn2"]:
     max_step = args.max_step_cnn
     max_size = args.max_size_cnn
     nb_epochs = args.nb_epochs_cnn
@@ -91,6 +91,8 @@ def main(args):
         model = TextRNNChar(args, "TextRNNChar")
       elif args.model_type == "chcnn":
         model = TextCNNChar(args, "TextCNNChar")
+      elif args.model_type == "chcnn2":
+        model = TextCNNChar(args, "TextCNNChar2")
       elif args.model_type == "rnnfe2":
         model = TextRNNFE2(args, "TextCNNCharFE2")
       elif args.model_type == "chrnnfe":
@@ -121,7 +123,7 @@ def main(args):
           train_batch = utils.get_batches(x_train, y_train, args.batch_size, args.max_len)
           valid_batch = utils.get_batches(x_eval, y_eval, max_size, args.max_len, False)
 
-        elif args.model_type in ["chrnn", "chcnn"]:
+        elif args.model_type in ["chrnn", "chcnn", "chcnn2"]:
           train_batch = utils.get_batches_with_char(x_train, char_train, y_train, args.batch_size, args.max_len)
           valid_batch = utils.get_batches_with_char(x_eval, char_eval, y_eval, max_size, args.max_len, False)
 
@@ -140,7 +142,7 @@ def main(args):
             comments, comments_length, labels = batch
             _, loss_t, global_step, batch_size = model.train(sess, comments, comments_length, labels)
 
-          elif args.model_type in ["chrnn", "chcnn"]:
+          elif args.model_type in ["chrnn", "chcnn", "chcnn2"]:
             comments, comments_length, chs, labels = batch
             _, loss_t, global_step, batch_size = model.train(sess, comments, comments_length, chs, labels)
 
@@ -188,7 +190,7 @@ def run_valid(valid_data, model, sess, model_type):
       comments, comments_length, labels = batch
       loss_t, logits_t, batch_size = model.test(sess, comments, comments_length, labels)
 
-    elif model_type in ["chrnn", "chcnn"]:
+    elif model_type in ["chrnn", "chcnn", "chcnn2"]:
       comments, comments_length, chs, labels = batch
       loss_t, logits_t, batch_size = model.test(sess, comments, comments_length, chs, labels)
 
@@ -241,7 +243,7 @@ def run_test(args, model, sess):
     test_batch = utils.get_test_batches(x_vector, args.max_size_rnn, args.max_len)
   elif args.model_type in ["chrnn"]:
     test_batch = utils.get_test_batches_with_char(x_vector, char_vector, args.max_size_rnn, args.max_len)
-  elif args.model_type in ["chcnn"]:
+  elif args.model_type in ["chcnn", "chcnn2"]:
     test_batch = utils.get_test_batches_with_char(x_vector, char_vector, args.batch_size, args.max_len)
   elif args.model_type in ["rnnfe", "cnnfe", "rnnfe2"]:
     test_batch = utils.get_test_batches_with_fe(x_vector, ex_features, args.max_size_rnn, args.max_len)
@@ -253,7 +255,7 @@ def run_test(args, model, sess):
     if args.model_type in ["cnn", "rnn", "rcnn"]:
       comments, comments_length = batch
       logits = model.get_logits(sess, comments, comments_length).tolist()
-    elif args.model_type in ["chrnn", "chcnn"]:
+    elif args.model_type in ["chrnn", "chcnn", "chcnn2"]:
       comments, comments_length, chs = batch
       logits = model.get_logits(sess, comments, comments_length, chs).tolist()
     elif args.model_type in ["rnnfe", "cnnfe", "rnnfe2"]:
