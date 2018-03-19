@@ -237,9 +237,9 @@ class TextCNNChar(Base):
     self.embedding_char = tf.get_variable("embedding_char", [self.char_vocab_size, self.char_embed_size], 
                                       dtype=tf.float32)
     self.embed_inp_char = tf.nn.embedding_lookup(self.embedding_char, self.char_x, name="embedded_input_char")
-    embed_input = tf.layers.dropout(self.embed_inp_char, self.eb_dropout)
 
     with tf.variable_scope("cnn_char"):
+      embed_input = tf.layers.dropout(self.embed_inp_char, self.eb_dropout)
       filter_shape = [1, self.char_filter_size[2], self.char_embed_size, self.char_num_filters]
       weight = self._weight_variable(filter_shape, name="char_weight")
       bias = self._bias_variable(self.char_num_filters, name="char_bias")
@@ -248,10 +248,10 @@ class TextCNNChar(Base):
                           strides=[1, 1, 1, 1],
                           padding="VALID",
                           name="chconv")
-      char_feature = tf.reduce_max(tf.nn.relu(conv + bias), 2) 
-
-      embed_input = tf.concat([self.embed_inp, char_feature], -1)
-      embed_input = tf.layers.dropout(embed_input, self.eb_dropout)
+      char_feature = tf.reduce_max(tf.nn.relu(conv + bias), 2)
+      char_feature = tf.layers.dropout(char_feature, self.dropout_eb)
+      embed_input = tf.layers.dropout(self.embed_inp, self.eb_dropout)
+      embed_input = tf.concat([embed_input, char_feature], -1)
       embed_exp = tf.expand_dims(embed_input, -1)
       pooling_output = []
       for i, filter_size in enumerate(self.filter_sizes):
@@ -440,11 +440,13 @@ class TextRNN(Base):
         rnn_state = tuple(rnn_state[0][num_bi_layers - 1], rnn_state[1][num_bi_layers - 1])
       self.rnn_state = tf.concat(rnn_state, -1)
       rnn_output = tf.concat(rnn_output, -1)
-      self.rnn_output = tf.layers.max_pooling1d(rnn_output, self.max_len, 1)
+      max_pool = tf.layers.max_pooling1d(rnn_output, self.max_len, 1)
+      avg_pool = tf.layers.average_pooling1d(rnn_output, self.max_len, 1)
 
     with tf.name_scope("output"):
-      tmp = tf.reshape(self.rnn_output, [-1, self.hidden_size * 2])
-      features = tf.concat([self.rnn_state, tmp], -1)
+      self.max_pool = tf.reshape(max_pool, [-1, self.hidden_size * 2])
+      self.avg_pool = tf.reshape(avg_pool, [-1, self.hidden_size * 2])
+      features = tf.concat([self.rnn_state, self.max_pool, self.avg_pool], -1)
       pre_score = tf.layers.dense(features, 32, activation=tf.nn.elu, name="pre_scores")
       self.scores = tf.layers.dense(pre_score, self.nb_classes, name="scores")
       self.logits = tf.nn.sigmoid(self.scores)
@@ -555,12 +557,12 @@ class TextRNNChar(Base):
                           padding="VALID",
                           name="chconv")
       char_feature = tf.reduce_max(tf.nn.relu(conv + bias), 2)
-
+      char_feature = tf.layers.dropout(char_feature, self.eb_dropout)
       num_layers = self.rnn_layers // 2
       fw_cell = self.build_rnn_cell(self.hidden_size, num_layers, 1.0)
       bw_cell = self.build_rnn_cell(self.hidden_size, num_layers, 1.0)
-      rnn_input = tf.concat([self.embed_inp, char_feature], -1)
-      rnn_input = tf.layers.dropout(rnn_input, self.eb_dropout)
+      rnn_input = tf.layers.dropout(self.embed_inp, self.eb_dropout)     
+      rnn_input = tf.concat([rnn_input, char_feature], -1)
 
       rnn_output, rnn_state = tf.nn.bidirectional_dynamic_rnn(cell_fw=fw_cell, 
                                                               cell_bw=bw_cell, 
